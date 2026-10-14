@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.control/
+literature/pdfs/
+literature/text/
+experiments/tmp/
+experiments/replays/

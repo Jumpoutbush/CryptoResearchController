@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "framework_version": "3.0.0-unified",
+  "target_root": "D:\\CryptoResearchController",
+  "sources": [
+    {
+      "name": "CryptoResearchController.rar",
+      "size_bytes": 171427,
+      "sha256": "db7e328085ff854e2b63e22b2547789d076fccea3ac75d37faa8abf61eea363a"
+    },
+    {
+      "name": "secagg-research.zip",
+      "size_bytes": 135205,
+      "sha256": "0cd780598ec0a498052f59d1c29380a615dd0441c713eb92081a53d1621d984f"
+    },
+    {
+      "name": "falcon-dkg.zip",
+      "size_bytes": 219094,
+      "sha256": "cef956c23d7b9919c590f1bfc3a4527473facc3bb3bac6af9a56869bf9c3c467"
+    }
+  ],
+  "preservation": {
+    "secagg-research": {
+      "goal_bytes_unchanged": true,
+      "prior_state_fields_unchanged": true,
+      "historical_file_count": 0,
+      "historical_bytes_unchanged": true,
+      "imported_git_head": "013e0406c31ff6f842111f753668170dc606e4ec",
+      "new_root_repository": "single main repository; nested initialization history replaced by source hashes and original HEAD references"
+    },
+    "falcon-dkg": {
+      "goal_bytes_unchanged": true,
+      "prior_state_fields_unchanged": true,
+      "historical_file_count": 32,
+      "historical_bytes_unchanged": true,
+      "imported_git_head": "67f4b0b9b8c8cb8a06f56a5779809321c02b2473",
+      "new_root_repository": "single main repository; nested initialization history replaced by source hashes and original HEAD references"
+    }
+  }
+}

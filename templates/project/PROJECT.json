@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "{{PROJECT_ID}}",
+  "title": "{{PROJECT_TITLE}}",
+  "profiles": [
+    "{{PROFILE}}"
+  ],
+  "checks": [
+    [
+      "scripts/check_project.py"
+    ]
+  ]
+}

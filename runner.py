@@ -1,0 +1,470 @@
+#!/usr/bin/env python3
+"""Safe front controller: delegates original research work to runner_core.py.
+
+Controller-owned configuration has the precedence:
+ command-line (this invocation) > persisted project override > global defaults.
+The original runner, model selection, literature tools, safety checks and Git
+checkpoint logic are not reimplemented by this overlay.
+"""
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+from route_budget import (
+    atom_json, check_signal, choose_candidate, evidence_path, evidence_snapshot,
+    file_lock, generate_directive, load_ledger, load_verdict, needs_review,
+    policy_for, project_key, read_json, save_ledger, selected_route,
+    set_project_override, stamp, state_path, state_read, STOP_DECISIONS,
+    total_budget,
+)
+
+HERE = Path(__file__).resolve().parent
+CORE = HERE / "runner_core.py"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="CryptoResearchController with persistent multi-project research-route budgets",
+        add_help=True)
+    parser.add_argument("--project", required=True, help="Research Git project directory")
+    parser.add_argument("--rounds", type=int, default=1,
+                        help="Maximum actual core research/review rounds THIS invocation")
+    parser.add_argument("--route-budget", type=int, default=None,
+                        help="Temporary initial budget override; does not persist")
+    parser.add_argument("--stagnation-rounds", type=int, default=None,
+                        help="Temporary consecutive non-progress threshold")
+    parser.add_argument("--extension-round-budget", type=int, default=None)
+    parser.add_argument("--max-extensions", type=int, default=None)
+    parser.add_argument("--set-route-budget", type=int, default=None,
+                        help="Persist per-project initial budget in controller config")
+    parser.add_argument("--set-stagnation-rounds", type=int, default=None)
+    parser.add_argument("--set-extension-round-budget", type=int, default=None)
+    parser.add_argument("--set-max-extensions", type=int, default=None)
+    parser.add_argument("--route-status", action="store_true")
+    parser.add_argument("--route-sync", action="store_true",
+                        help="Explicitly accept external last_run drift without charging budget")
+    parser.add_argument("--clear-project-route-policy", action="store_true",
+                        help="Back up and delete the stored project budget override; restore global defaults")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--fetch-only", action="store_true")
+    parser.add_argument("--prepare-pro", action="store_true")
+    parser.add_argument("--max-seconds", type=int, default=None)
+    parser.add_argument("--no-fetch", action="store_true")
+    known, unknown = parser.parse_known_args(argv)
+    if known.rounds < 1:
+        parser.error("--rounds must be positive")
+    return parser, known, unknown
+
+
+def args_to_core(args, unknown, *, dry_run=False, fetch_only=False, prepare_pro=False):
+    command = [sys.executable, str(CORE), "--project", str(Path(args.project).resolve())]
+    if args.max_seconds is not None:
+        command.extend(["--max-seconds", str(args.max_seconds)])
+    if args.no_fetch:
+        command.append("--skip-fetch")
+    if dry_run or args.dry_run:
+        command.append("--dry-run")
+    if fetch_only or args.fetch_only:
+        command.append("--fetch-only")
+    if prepare_pro or args.prepare_pro:
+        command.append("--prepare-pro")
+    command.extend(unknown)
+    return command
+
+
+def run_child(command) -> int:
+    if not CORE.exists():
+        raise FileNotFoundError(f"Original controller missing: {CORE} (restore from backup)")
+    # Run a separate interpreter to preserve the old process's imports, argument
+    # parser, model routing, evidence checks, status logs, and local Git behavior.
+    env = os.environ.copy()
+    env.update({"CRC_DEFER_CHECKPOINT": "1", "CRC_TRANSACTION_EXTERNAL": "1"})
+    proc = subprocess.Popen(command, cwd=HERE, env=env,
+                            start_new_session=(os.name != "nt"),
+                            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0))
+    try:
+        return proc.wait()
+    except KeyboardInterrupt:
+        from runner_core import kill_process_tree
+        kill_process_tree(proc)
+        raise
+
+
+def print_status(project: Path, policy: dict, origins: dict, epoch: dict, ledger_path: Path):
+    print("PROJECT:", project)
+    print("ROUTE:", epoch["route"])
+    print("ROUTE_EPOCH:", epoch["epoch"])
+    print("ROUTE_EFFECTIVE_ROUNDS:", epoch["effective_rounds"])
+    print("ROUTE_STAGNATION:", epoch["stagnation"])
+    print("ROUTE_EXTENSIONS:", epoch["extensions_used"], "/", policy["max_extensions"])
+    print("ROUTE_BUDGET:", total_budget(epoch, policy))
+    print("ROUTE_PENDING_REVIEW:", needs_review(epoch, policy) or "none")
+    print("ROUTE_POLICY_SOURCES:", json.dumps(origins, ensure_ascii=False))
+    print("ROUTE_LEDGER:", ledger_path)
+
+
+def restore_preflight(project: Path, original: dict, preflight: dict):
+    # Do not erase concurrent or partial research outcomes with changed last_run.
+    try:
+        present = state_read(project)
+    except Exception:
+        return False
+    if present.get("last_run") != original.get("last_run"):
+        return False
+    # A failed native execution cannot advance the accepted research state.
+    # Preserve any partial agent edits in the controller's failure archive
+    # before restoring the preflight snapshot.
+    if present != preflight:
+        archive = HERE / "state" / "failed_preflight" / project_key(project)
+        archive.mkdir(parents=True, exist_ok=True)
+        import uuid
+        atom_json(archive / ("failed-" + uuid.uuid4().hex + ".json"), present)
+    atom_json(state_path(project), original)
+    return True
+
+
+def core_completed(project: Path, previous: dict) -> tuple[bool, dict | None, str]:
+    try:
+        after = state_read(project)
+    except Exception as exc:
+        return False, None, "Cannot load state after core: " + str(exc)
+    run_id = after.get("last_run")
+    if not run_id or run_id == previous.get("last_run"):
+        return False, after, "Native runner did not create a fresh last_run"
+    # Reject path traversal from an untrusted agent-supplied run ID.
+    if not isinstance(run_id, str) or '/' in run_id or '\\' in run_id or '..' in run_id:
+        return False, after, "Invalid last_run file name"
+    report = project / "reports" / f"{run_id}.md"
+    if not report.is_file() or report.stat().st_size < 120:
+        return False, after, "Native-run report missing/too short"
+    return True, after, run_id
+
+
+def mark_review(epoch: dict, ledger: dict, reason: str):
+    epoch["review_pending"] = True
+    epoch["review_reason"] = reason
+    ledger["events"].append({"type": "REVIEW_SCHEDULED", "route": epoch["route"],
+                             "reason": reason, "effective_rounds": epoch["effective_rounds"], "at": stamp()})
+
+
+def record_round(project: Path, ledger: dict, epoch: dict, policy: dict,
+                 after: dict, before_hashes: dict):
+    run_id = after["last_run"]
+    if run_id in epoch["counted_run_ids"]:
+        raise ValueError("Duplicate run_id; refusing double-charge")
+    progress, kind, artifacts, blocked = check_signal(project, run_id, before_hashes)
+    epoch["counted_run_ids"].append(run_id)
+    epoch["last_processed_run"] = run_id
+    epoch["effective_rounds"] += 1
+    epoch["stagnation"] = 0 if progress else epoch["stagnation"] + 1
+    ledger["events"].append({"type": "RESEARCH_ROUND", "route": epoch["route"],
+                             "run_id": run_id, "effective_rounds": epoch["effective_rounds"],
+                             "substantive_progress_claim": progress, "evidence_type": kind,
+                             "changed_evidence_paths": artifacts, "at": stamp(),
+                             "note": "Progress is only a procedural signal; proofs and novelty remain unverified."})
+    if blocked and policy["automatic_falsification"]:
+        mark_review(epoch, ledger, "evidence_backed_route_blocker")
+    else:
+        reason = needs_review(epoch, policy)
+        if reason:
+            mark_review(epoch, ledger, reason)
+    return progress, kind
+
+
+def decision_pause(project: Path, verdict: dict, message: str) -> None:
+    state = state_read(project)
+    state["decision"] = "NEEDS_REVIEW"
+    state["next_task"] = ("等待对科研路线裁决的人工审查。" + message +
+                          "；审查 research/ROUTE_VERDICT.json 及本轮报告后再恢复。")
+    atom_json(state_path(project), state)
+
+
+def apply_review(project: Path, ledger: dict, epoch: dict, policy: dict, after: dict) -> str:
+    run_id = after["last_run"]
+    epoch["last_processed_run"] = run_id
+    epoch["review_count"] += 1
+    ledger["events"].append({"type": "ROUTE_REVIEW", "run_id": run_id,
+                             "route": epoch["route"], "at": stamp()})
+    try:
+        verdict = load_verdict(project, run_id)
+    except (ValueError, OSError) as exc:
+        decision_pause(project, {}, "裁决文件缺失或格式错误：" + str(exc))
+        ledger["events"].append({"type": "ROUTE_REVIEW_INVALID", "run_id": run_id,
+                                 "error": str(exc), "at": stamp()})
+        epoch["review_pending"] = False
+        return "PAUSED_INVALID_VERDICT"
+
+    outcome = verdict["outcome"]
+    if after.get("decision") in STOP_DECISIONS:
+        ledger["events"].append({"type": "NATIVE_REVIEW_HALT", "run_id": run_id,
+                                 "decision": after.get("decision"), "at": stamp()})
+        epoch["review_pending"] = False
+        return "PAUSED_NATIVE_REVIEW_HALT"
+    ledger["events"].append({"type": "ROUTE_VERDICT_RECORDED", "run_id": run_id,
+                             "outcome": outcome, "reason": verdict["reason"], "at": stamp(),
+                             "scope": "PROVISIONAL_UNVERIFIED"})
+    if verdict.get("unapproved_goal_change") and policy["require_approval_for_goal_change"]:
+        decision_pause(project, verdict, "候选要求改变 GOAL 的不可放宽条件")
+        epoch["review_pending"] = False
+        return "PAUSED_GOAL_CHANGE"
+    if outcome == "EXTEND":
+        if epoch["extensions_used"] >= policy["max_extensions"]:
+            decision_pause(project, verdict, "已达到最大延期次数")
+            epoch["review_pending"] = False
+            return "PAUSED_EXTENSIONS_EXHAUSTED"
+        epoch["extensions_used"] += 1
+        epoch["review_pending"] = False
+        epoch["review_reason"] = None
+        epoch["stagnation"] = 0
+        revised = state_read(project)
+        revised["decision"] = "CONTINUE"
+        revised["next_task"] = verdict.get("next_task") if isinstance(verdict.get("next_task"), str) and len(verdict["next_task"]) >= 24 else (
+            "在批准追加研究预算后，选择一个新颖且可证伪的最小子命题，先查新并尝试严格反例；不得重复本轮无效实验。")
+        atom_json(state_path(project), revised)
+        ledger["events"].append({"type": "EXTENSION_GRANTED", "route": epoch["route"],
+                                 "new_total_budget": total_budget(epoch, policy), "at": stamp()})
+        return "EXTENDED"
+    if outcome in {"PIVOT_PROVISIONAL", "REJECT_SCOPE_LIMITED"}:
+        if not policy["automatic_candidate_discovery"]:
+            decision_pause(project, verdict, "自动候选发现已关闭")
+            epoch["review_pending"] = False
+            return "PAUSED_DISCOVERY_DISABLED"
+        chosen = choose_candidate(project, verdict)
+        if chosen is None:
+            decision_pause(project, verdict, "候选路线没有通过证据、目标兼容和新命题检查")
+            epoch["review_pending"] = False
+            return "PAUSED_NO_ELIGIBLE_CANDIDATE"
+        target = chosen["route"].rstrip("/")
+        if target == epoch["route"] or target.split("/")[0] == epoch["route"].split("/")[0]:
+            decision_pause(project, verdict, "候选仍属当前路线，无有效跨路线转移")
+            epoch["review_pending"] = False
+            return "PAUSED_NO_ROUTE_CHANGE"
+        state = state_read(project)
+        state["phase"] = "FALSIFICATION"
+        state["decision"] = "CONTINUE"
+        previous_idea = state.get('selected_idea')
+        if previous_idea is not None:
+            state['origin_idea'] = previous_idea
+        state['selected_idea'] = None
+        # Active cards remain versioned; the old card no longer governs a pivoted task.
+        index_path = project / 'ideas/INDEX.json'
+        if index_path.is_file():
+            idea_index = read_json(index_path)
+            idea_index['active_idea'] = None
+            idea_index.setdefault('events', []).append({'type': 'AUTO_ROUTE_PIVOT',
+                'origin_idea': previous_idea, 'route': target, 'at': stamp()})
+            atom_json(index_path, idea_index)
+        state["research_route"] = target if "/" in target else target + "/FEASIBILITY"
+        state["priority_problem"] = chosen["priority_problem"]
+        state["next_task"] = chosen["next_task"]
+        # Keep verified_results/publication_status/GOAL unchanged.
+        atom_json(state_path(project), state)
+        epoch["review_pending"] = False
+        epoch["closed"] = True
+        ledger["events"].append({"type": "PROVISIONAL_ROUTE_PIVOT", "from": epoch["route"],
+                                 "to": state["research_route"], "origin_idea": previous_idea, "at": stamp(),
+                                 "note": "Comparative feasibility work, not a universal impossibility proof."})
+        return "PIVOT_PROVISIONAL"
+    decision_pause(project, verdict, "审查结论为 PAUSE_FOR_REVIEW")
+    epoch["review_pending"] = False
+    return "PAUSED_FOR_REVIEW"
+
+
+def finish_status(project: Path, *, accepted: bool, outcome: str, run_id=None, archive=None):
+    from runner_core import git_checkpoint
+    status_path = HERE / 'logs' / project_key(project) / 'latest-status.json'
+    status = read_json(status_path) if status_path.exists() else {}
+    status.update({'wrapper_accepted': accepted, 'route_outcome': outcome})
+    if not accepted:
+        status['status'] = 'INCOMPLETE'
+        status['failure_archive'] = archive
+        status['git_checkpoint'] = 'SKIPPED_UNSUCCESSFUL_ROUND'
+    elif run_id:
+        status['git_checkpoint'] = git_checkpoint(project, run_id)
+    atom_json(status_path, status)
+    if status.get('run_id'):
+        atom_json(status_path.parent / (status['run_id'] + '.status.json'), status)
+
+
+def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
+                epoch: dict, core_cmd: list[str]) -> tuple[int, str]:
+    from runner_core import ProjectTransaction
+    if (project / '.control/STOP_REQUESTED').exists():
+        return 0, 'SKIPPED_BY_STOP_REQUEST'
+    before = state_read(project)
+    if before['decision'] in STOP_DECISIONS or before['phase'] == 'DONE':
+        return 0, 'SKIPPED_BY_RESEARCH_STATE'
+    if epoch['last_processed_run'] != before.get('last_run'):
+        return 3, ('ROUTE_STATE_DRIFT: a different runner or manual edit changed STATE.last_run. '
+                   'Inspect evidence and rerun with --route-sync if intentional.')
+    reason = needs_review(epoch, policy)
+    if reason and not epoch['review_pending']:
+        mark_review(epoch, ledger, reason)
+        save_ledger(ledger_path, ledger)
+    reviewing = epoch['review_pending']
+    if reviewing and not policy['automatic_route_review']:
+        state = copy.deepcopy(before)
+        state['decision'] = 'NEEDS_REVIEW'
+        atom_json(state_path(project), state)
+        return 0, 'PAUSED_ROUTE_REVIEW_DISABLED'
+    before_hashes = evidence_snapshot(project)
+    transaction = ProjectTransaction(project).capture()
+    accepted = False
+    archive = None
+    outcome = 'NATIVE_CORE_FAILED'
+    pause_reason = None
+    preflight = copy.deepcopy(before)
+    try:
+        preflight['next_task'] = generate_directive(
+            selected_route(before), epoch, policy, reviewing, epoch['review_reason'], before['next_task'])
+        atom_json(state_path(project), preflight)
+        print('MODE:', 'ROUTE_REVIEW' if reviewing else 'RESEARCH', 'ROUTE:', epoch['route'],
+              'USED:', epoch['effective_rounds'], 'BUDGET:', total_budget(epoch, policy), flush=True)
+        command = list(core_cmd)
+        if reviewing and '--audit' not in command: command.append('--audit')
+        code = run_child(command)
+        if code:
+            outcome = f'NATIVE_CORE_FAILED exit_code={code}'
+            return code, outcome
+        okay, after, detail = core_completed(project, before)
+        if not okay:
+            outcome = 'CORE_SUCCESS_WITHOUT_ACCEPTED_RESEARCH: ' + detail
+            return 3, outcome
+        if after['next_task'] == preflight['next_task']:
+            pause_reason = '本轮未更新 next_task；本轮文件已归档并恢复上一接受状态。'
+            outcome = 'NEXT_TASK_NOT_ADVANCED'
+            return 3, outcome
+        if after.get('selected_idea') != before.get('selected_idea'):
+            pause_reason = '本轮研究代理改动了已固定的研究想法版本；已恢复上一接受状态。'
+            outcome = 'UNCONTROLLED_IDEA_CHANGE'
+            return 3, outcome
+        if selected_route(after) != selected_route(before):
+            pause_reason = '本轮研究代理绕过路线裁决改动 research_route；已恢复上一接受状态。'
+            outcome = 'UNCONTROLLED_ROUTE_CHANGE'
+            return 3, outcome
+        if reviewing:
+            outcome = apply_review(project, ledger, epoch, policy, after)
+            save_ledger(ledger_path, ledger)
+            print('ROUTE_DECISION:', outcome)
+        else:
+            progress, kind = record_round(project, ledger, epoch, policy, after, before_hashes)
+            save_ledger(ledger_path, ledger)
+            print('ROUTE_PROGRESS:', kind, 'SUBSTANTIVE_SIGNAL:', progress,
+                  'EFFECTIVE_ROUNDS:', epoch['effective_rounds'], 'STAGNATION:', epoch['stagnation'])
+            if needs_review(epoch, policy): print('ROUTE_REVIEW_PENDING:', needs_review(epoch, policy))
+            outcome = 'COUNTED_RESEARCH_ROUND'
+        transaction.accept()
+        accepted = True
+        finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'])
+        return 0, outcome
+    except KeyboardInterrupt:
+        outcome = 'INTERRUPTED'
+        raise
+    finally:
+        if not accepted:
+            archive = transaction.rollback(outcome)
+            if pause_reason: decision_pause(project, {}, pause_reason)
+            finish_status(project, accepted=False, outcome=outcome, archive=archive)
+
+
+def main(argv=None) -> int:
+    parser, args, unknown = parse_args(argv)
+    project = Path(args.project).expanduser().resolve()
+    if not (project / "research" / "STATE.json").exists():
+        parser.error("Project research/STATE.json is missing")
+    if not CORE.is_file():
+        parser.error("runner_core.py missing; installation incomplete")
+    tmp = {"initial_round_budget": args.route_budget,
+           "stagnation_rounds": args.stagnation_rounds,
+           "extension_round_budget": args.extension_round_budget,
+           "max_extensions": args.max_extensions}
+    persistent = {"initial_round_budget": args.set_route_budget,
+                  "stagnation_rounds": args.set_stagnation_rounds,
+                  "extension_round_budget": args.set_extension_round_budget,
+                  "max_extensions": args.set_max_extensions}
+    if args.dry_run and (args.route_sync or args.clear_project_route_policy or any(x is not None for x in persistent.values())):
+        parser.error('A dry-run cannot be combined with configuration/state changes')
+    # Inspection creates no lock, runtime directory, or route ledger.
+    if args.dry_run or (args.route_status and not any(x is not None for x in persistent.values()) and not args.route_sync):
+        policy, origins, _ = policy_for(HERE, project, tmp)
+        before = state_read(project)
+        ledger_path, ledger, epoch = load_ledger(HERE, project, before)
+        print_status(project, policy, origins, epoch, ledger_path)
+        return run_child(args_to_core(args, unknown)) if args.dry_run else 0
+    lock_path = HERE / 'locks' / ('route-' + project_key(project) + '.lock')
+    try:
+        with file_lock(lock_path):
+            if args.clear_project_route_policy:
+                if any(x is not None for x in persistent.values()):
+                    parser.error("Cannot combine --clear-project-route-policy with --set-* options")
+                _, _, project_policy_path = policy_for(HERE, project)
+                if project_policy_path.exists():
+                    import uuid
+                    path_backup = HERE / "backups" / "route-policy-overrides" / (
+                        project_policy_path.name + "." + uuid.uuid4().hex + ".bak")
+                    path_backup.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(project_policy_path, path_backup)
+                    existing = read_json(project_policy_path)
+                    existing.pop('route_policy', None)
+                    atom_json(project_policy_path, existing)
+                    print("PROJECT_ROUTE_POLICY_CLEARED:", project_policy_path)
+                    print("SAVED_OVERRIDE_BACKUP:", path_backup)
+                else:
+                    print("PROJECT_ROUTE_POLICY_ALREADY_DEFAULT")
+                return 0
+            if any(x is not None for x in persistent.values()):
+                path = set_project_override(HERE, project, {k: v for k, v in persistent.items() if v is not None})
+                print("ROUTE_PROJECT_OVERRIDE_UPDATED:", path)
+            policy, origins, _ = policy_for(HERE, project, tmp)
+            if args.rounds > policy["max_rounds_per_invocation"]:
+                parser.error("--rounds exceeds max_rounds_per_invocation")
+            before = state_read(project)
+            ledger_path, ledger, epoch = load_ledger(HERE, project, before)
+            if args.route_sync:
+                if before["last_run"] != epoch["last_processed_run"]:
+                    ledger["events"].append({"type": "EXTERNAL_STATE_SYNCHRONIZED", "route": epoch["route"],
+                                             "previous": epoch["last_processed_run"],
+                                             "new": before["last_run"], "at": stamp(),
+                                             "note": "Uncounted: confirm external run manually."})
+                    epoch["last_processed_run"] = before["last_run"]
+            save_ledger(ledger_path, ledger)
+            if args.route_status or args.dry_run:
+                print_status(project, policy, origins, epoch, ledger_path)
+            if args.route_status or any(x is not None for x in persistent.values()):
+                return 0
+            if args.dry_run or args.fetch_only or args.prepare_pro:
+                return run_child(args_to_core(args, unknown))
+            for count in range(args.rounds):
+                state = state_read(project)
+                ledger_path, ledger, epoch = load_ledger(HERE, project, state)
+                if (project / '.control/STOP_REQUESTED').exists():
+                    print('STOP_REQUESTED: stopping before the next round')
+                    return 0
+                if state["decision"] in STOP_DECISIONS or state["phase"] == "DONE":
+                    print("PROJECT_PAUSED_OR_DONE:", state["decision"], state["phase"])
+                    save_ledger(ledger_path, ledger)
+                    return 0
+                cmd = args_to_core(args, unknown)
+                # Consecutive executions delegate a *single* Codex round each.
+                code, outcome = advance_one(project, policy, ledger_path, ledger, epoch, cmd)
+                print("ROUND_OUTCOME:", outcome, flush=True)
+                if code:
+                    return code
+                if outcome.startswith("PAUSED") or outcome.startswith("SKIPPED"):
+                    return 0
+            return 0
+    except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
+        print("ROUTE_CONTROLLER_ERROR:", str(exc), file=sys.stderr)
+        return 3
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    "{{PROFILE}}"
+  ],
+  "read_order": [
+    "inputs/CONTEXT.md",
+    "inputs/NOTATION.md"
+  ],
+  "constraints": []
+}

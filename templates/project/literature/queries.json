@@ -1,0 +1,9 @@
+{
+  "queries": [
+    "{{PROJECT_TITLE}}"
+  ],
+  "keywords": [],
+  "max_per_query": 6,
+  "eprint_rss": true,
+  "generated_initial_query": true
+}

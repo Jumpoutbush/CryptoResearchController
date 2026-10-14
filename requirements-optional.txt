@@ -1,0 +1,3 @@
+# PDF extraction plus imported historical numerical probes
+-r requirements-pdf.txt
+numpy>=1.26,<3

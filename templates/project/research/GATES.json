@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "gates": {
+    "G0": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G1": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G2": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G3": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G4": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G5": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G6": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G7": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    },
+    "G8": {
+      "status": "INCOMPLETE",
+      "evidence": [],
+      "reason": "首次研究尚未完成"
+    }
+  }
+}

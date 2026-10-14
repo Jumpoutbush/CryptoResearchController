@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "model_policy": {
+    "routine": {"model": "gpt-6.1-sol", "effort": "xhigh"},
+    "critical": {"model": "gpt-6-astra", "effort": "max"},
+    "critical_phases": ["NOVELTY", "FALSIFICATION", "CORRECTNESS", "PROOF", "SECURITY", "REVIEW"]
+  },
+  "execution": {
+    "max_seconds": 2400,
+    "pause_seconds": 10,
+    "max_rounds": 8,
+    "network_access": true,
+    "web_search": "live"
+  },
+  "literature": {
+    "automatic_pdf_download": false,
+    "max_pdf_downloads_per_round": 3,
+    "max_pdf_mb": 25
+  }
+}

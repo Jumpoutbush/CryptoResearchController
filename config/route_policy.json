@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "initial_round_budget": 6,
+  "stagnation_rounds": 3,
+  "extension_round_budget": 4,
+  "max_extensions": 2,
+  "automatic_falsification": true,
+  "automatic_route_review": true,
+  "automatic_candidate_discovery": true,
+  "require_approval_for_goal_change": true,
+  "max_rounds_per_invocation": 8
+}

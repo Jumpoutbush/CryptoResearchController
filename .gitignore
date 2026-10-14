@@ -1,0 +1,36 @@
+# Credentials and local runtime
+.env
+.env.*
+!.env.example
+.venv/
+.codex/
+**/.codex/
+**/auth.json
+**/credentials.json
+**/__pycache__/
+*.py[cod]
+logs/
+locks/
+state/failed_runs/
+state/failed_preflight/
+state/transactions/
+state/tmp/
+**/.control/
+# Keep accepted route ledgers versioned
+!state/routes/
+!state/routes/*.json
+# Regenerable caches and experiment scratch
+**/literature/pdfs/
+**/literature/text/
+**/experiments/replays/
+**/experiments/tmp/
+*.tmp
+*.part
+*.bak
+*.bak-*
+~$*
+.DS_Store
+Thumbs.db
+state/snapshots/
+
+/projects/

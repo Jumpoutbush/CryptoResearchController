@@ -1,0 +1,11 @@
+{
+  "phase": "INTAKE",
+  "decision": "PAUSE",
+  "priority_problem": "确认 {{PROJECT_TITLE}} 的可证伪研究问题与最相近成果",
+  "next_task": "读取用户目标和原始材料，明确输入输出、冻结条件、已有覆盖与最小反例；形成可检验子命题和缺失资料清单，保存到 research/INTAKE.md。",
+  "open_obligations": [],
+  "verified_results": [],
+  "publication_status": "NOT_ESTABLISHED",
+  "last_run": null,
+  "research_route": "INITIAL/INTAKE"
+}
