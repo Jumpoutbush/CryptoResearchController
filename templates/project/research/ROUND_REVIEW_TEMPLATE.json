@@ -7,5 +7,13 @@
   "nontriviality_argument": "待核查与最近成果的技术差异",
   "contribution_type": "NONE",
   "result_status": "OPEN",
-  "evidence_paths": []
+  "evidence_paths": [],
+  "goal_impact": {
+    "anchor_id": "从本轮控制器主线锚点复制",
+    "scope": "CORE",
+    "target_obligation": "直接推进的核心义务",
+    "before": "执行前的准确缺口",
+    "after": "本轮证据带来的具体变化",
+    "next_mainline_task": "回到主线的下一可证伪动作"
+  }
 }

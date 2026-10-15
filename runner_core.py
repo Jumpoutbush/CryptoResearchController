@@ -52,6 +52,7 @@ RULES = (
     '12_TECHNICAL_LITERATURE_REVIEW.md', '13_THEORETICAL_CONTRIBUTION.md',
     '14_IDEA_INTEGRATION.md', '15_RESEARCH_RECEIPTS.md', '16_THEORY_BEFORE_IMPLEMENTATION.md',
     '17_MATHEMATICAL_DISCOVERY.md',
+    '18_MAINLINE_FOCUS.md',
 )
 DOMAIN_RULES = {'ntru_lattice': 'NTRU_LATTICE.md', 'mpc_secagg': 'MPC_SECAGG.md'}
 
@@ -346,7 +347,9 @@ def project_input_context(project: pathlib.Path) -> str:
     return '\n\n'.join(chunks)
 
 
-def stage_instructions(project: pathlib.Path, phase: str, audit=False) -> str:
+def stage_instructions(project: pathlib.Path, phase: str, audit=False, route_review=False) -> str:
+    if route_review:
+        return '# Route selection instructions\n' + read_text(ROOT / 'prompts/route_review.md')
     stage = 'REVIEW' if audit else phase
     if stage not in PHASES: raise RuntimeError('Invalid prompt stage')
     root_file = ROOT / 'prompts/stages' / (stage + '.md')
@@ -365,13 +368,16 @@ def stage_instructions(project: pathlib.Path, phase: str, audit=False) -> str:
     return '\n\n'.join(pieces)
 
 
-def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, audit=False) -> str:
+def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, audit=False, route_review=False) -> str:
+    if audit and route_review:
+        raise ValueError('Proof audit and route review are different execution modes')
     rules = [f'## Controller methodology: {name}\n' + read_text(METHOD / name) for name in RULES]
     rules += [f'## Domain-specific requirements: {path.name}\n' + read_text(path)
               for path in project_rules(project)]
     goal = read_text(project / 'GOAL.md')
     last = read_text(project / 'reports' / 'LATEST.md')
-    if len(last) > 12000: last = last[-12000:]
+    if len(last) > 12000:
+        last = last[:6500] + '\n[Middle omitted; read the full report when needed.]\n' + last[-5500:]
     prompt = '\n\n'.join([
         f'# Autonomous cryptography research round {rid}',
         'This is one bounded, autonomous research iteration. Investigate one real, falsifiable subproblem. '
@@ -388,17 +394,21 @@ def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, aud
             'literature/pdf_index.json', 'literature/RELATED_WORK.md',
             'literature/NOVELTY_GAP.md', 'research/DECISION_LOG.md')),
         '# Latest report (for continuity; inspect cited source files)\n' + last,
-        '# Project continuation instructions\n' + read_text(project / 'prompts/continue.md'),
-        stage_instructions(project, state['phase'], audit=audit),
+        ('# Prior project continuation context (task selection is being reviewed)\n' if route_review
+         else '# Project continuation instructions\n') + read_text(project / 'prompts/continue.md'),
+        stage_instructions(project, state['phase'], audit=audit, route_review=route_review),
         project_input_context(project),
         __import__('engine.initialization', fromlist=['context']).context(project, state),
         __import__('engine.deep_reasoning', fromlist=['context']).context(project),
         '# Research ideas supplied by the user\n' + read_text(project / 'ideas/INDEX.md'),
         '# Input manifest\n' + read_text(project / 'inputs/MANIFEST.json'),
-        ('# AUDIT MODE\nIndependently and adversarially challenge the last claimed result; '
+        ('# ROUTE REVIEW MODE\nReview the connection between recent work and the frozen project goal. '
+         'Select the next core task or justify a core blocker; do not continue the last proof merely because it is unfinished. '
+         'Pending review of an unused supporting lemma does not block independent mainline work.'
+         if route_review else '# AUDIT MODE\nIndependently and adversarially challenge the last claimed result; '
          'do not add a new main construction; identify the earliest failed gate. '
          if audit else '# RESEARCH MODE\nActively execute the highest-value test, proof step, or experiment.'),
-        __import__('research_quality').prompt_contract(technical_review=audit or state['phase'] in {'LITERATURE','NOVELTY','REVIEW'}),
+        __import__('research_quality').prompt_contract(technical_review=audit or route_review or state['phase'] in {'LITERATURE','NOVELTY','REVIEW'}),
         '# Enforced round output contract\n'
         + '\n'.join([
             f'1. Save a substantive report to reports/{rid}.md including a literal RUN_ID: {rid}.',
@@ -722,16 +732,16 @@ def pro_handoff(project, state):
     print('PRO_REVIEW_REQUEST:', output, flush=True)
 
 
-def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
+def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False, route_review=False,
               model=None, effort=None, offline=False):
     from route_budget import project_key
     state = validate_project(project)
-    tier, chosen_model, chosen_effort = plan_route(project, state, audit=audit, model=model, effort=effort)
+    tier, chosen_model, chosen_effort = plan_route(project, state, audit=audit or route_review, model=model, effort=effort)
     if state.get('decision', 'CONTINUE') in STOP:
         print('STOP_BY_DECISION:', state.get('decision'), flush=True)
         return 3
     from theory_gate import SYSTEM_PHASES, require_system_ready
-    if state['phase'] in SYSTEM_PHASES and not audit: require_system_ready(project)
+    if state['phase'] in SYSTEM_PHASES and not (audit or route_review): require_system_ready(project)
     rid = run_id(round_num)
     from engine import discovery_scheduler as discovery
     discovery.check(project)
@@ -755,8 +765,8 @@ def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
             print('LITERATURE:', lit.get('status'), 'candidates:', lit.get('candidate_count'), flush=True)
         transaction.freeze_protected()
         from theory_gate import SYSTEM_PHASES, require_system_ready
-        if state['phase'] in SYSTEM_PHASES and not audit: require_system_ready(project)
-        prompt = build_prompt(project, state, rid, tier, audit=audit)
+        if state['phase'] in SYSTEM_PHASES and not (audit or route_review): require_system_ready(project)
+        prompt = build_prompt(project, state, rid, tier, audit=audit, route_review=route_review)
         codex_path = shutil.which('codex')
         if not codex_path: raise RuntimeError('Codex CLI not found in PATH')
         remaining = deadline - time.monotonic()
@@ -850,7 +860,9 @@ def main(argv=None):
     parser.add_argument('--rounds', type=int, default=1, help='bounded number of sequential research rounds, 1..12')
     parser.add_argument('--skip-fetch', '--no-fetch', dest='skip_fetch', action='store_true', help='skip literature refresh in research rounds')
     parser.add_argument('--offline', action='store_true', help='only process local PDFs and cached metadata')
-    parser.add_argument('--audit', action='store_true', help='run an adversarial research-audit round')
+    review_mode = parser.add_mutually_exclusive_group()
+    review_mode.add_argument('--audit', action='store_true', help='run an adversarial proof-audit round')
+    review_mode.add_argument('--route-review', action='store_true', help='review research direction and select the next core task')
     parser.add_argument('--model', help='optional one-off model override')
     parser.add_argument('--effort', help='optional one-off reasoning effort override')
     args = parser.parse_args(argv)
@@ -862,7 +874,7 @@ def main(argv=None):
     if args.max_seconds < 30:
         parser.error('--max-seconds must be at least 30')
     state = validate_project(project)
-    tier, model, effort = plan_route(project, state, audit=args.audit, model=args.model, effort=args.effort)
+    tier, model, effort = plan_route(project, state, audit=args.audit or args.route_review, model=args.model, effort=args.effort)
     print('PROJECT:', project, '\nPHASE:', state.get('phase'), '\nDECISION:', state.get('decision'),
           '\nMODEL_ROUTE:', tier, model or 'Codex global', effort or 'Codex global', flush=True)
     if args.dry_run:
@@ -878,7 +890,7 @@ def main(argv=None):
         for n in range(1, args.rounds + 1):
             code = run_round(project, round_num=n, seconds=args.max_seconds,
                              skip_fetch=args.skip_fetch or (n > 1),
-                             audit=args.audit, model=args.model, effort=args.effort,
+                             audit=args.audit, route_review=args.route_review, model=args.model, effort=args.effort,
                              offline=args.offline)
             if code:
                 print(f'ROUND_STOP: code={code}; no further automatic rounds', flush=True)

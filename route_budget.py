@@ -43,7 +43,7 @@ BOOL_FIELDS = {
 STOP_DECISIONS = {"PAUSE", "STOP", "NEEDS_REVIEW"}
 VALID_PROGRESS = {"NO_PROGRESS", "REFINEMENT", "COUNTEREXAMPLE", "CONSTRUCTION", "PROOF_STEP", "COST_BOUND", "PRIOR_ART", "REPRODUCIBLE_TEST"}
 SUBSTANTIVE = {"COUNTEREXAMPLE", "CONSTRUCTION", "PROOF_STEP", "COST_BOUND", "PRIOR_ART", "REPRODUCIBLE_TEST"}
-VALID_VERDICTS = {"EXTEND", "PIVOT_PROVISIONAL", "PAUSE_FOR_REVIEW", "REJECT_SCOPE_LIMITED"}
+VALID_VERDICTS = {"EXTEND", "REFOCUS", "PIVOT_PROVISIONAL", "PAUSE_FOR_REVIEW", "REJECT_SCOPE_LIMITED"}
 ROUTE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,79}$")
 
 
@@ -206,6 +206,10 @@ def load_ledger(controller: Path, project: Path, state: dict) -> tuple[Path, dic
         if former is not None:
             for field in ("effective_rounds", "stagnation", "extensions_used", "review_pending", "review_reason"):
                 epoch[field] = former[field]
+            import copy
+            for field in ('focus', 'support_rounds', 'mainline_fingerprints', 'operator_added_rounds'):
+                if field in former:
+                    epoch[field] = copy.deepcopy(former[field])
             epoch["counted_run_ids"] = list(former["counted_run_ids"])
             ledger["events"].append({"type": "ROUTE_REVISITED", "route": route,
                                      "inherited_effective_rounds": epoch["effective_rounds"],
@@ -213,6 +217,8 @@ def load_ledger(controller: Path, project: Path, state: dict) -> tuple[Path, dic
         else:
             ledger["events"].append({"type": "NEW_ROUTE_EPOCH", "route": route, "at": stamp()})
         ledger["epochs"].append(epoch)
+    from research_focus import ensure_focus
+    ensure_focus(project, ledger['epochs'][-1], state)
     return path, ledger, ledger["epochs"][-1]
 
 
@@ -224,7 +230,8 @@ def save_ledger(path: Path, ledger: dict) -> None:
 
 
 def total_budget(epoch: dict, policy: dict) -> int:
-    return policy["initial_round_budget"] + epoch["extensions_used"] * policy["extension_round_budget"]
+    return (policy["initial_round_budget"] + epoch["extensions_used"] * policy["extension_round_budget"]
+            + epoch.get('operator_added_rounds', 0))
 
 
 def needs_review(epoch: dict, policy: dict) -> str | None:
@@ -389,10 +396,10 @@ def generate_directive(route: str, epoch: dict, policy: dict, review: bool, reas
                   "涉及必须人工停止的安全问题应保留 NEEDS_REVIEW。\n")
     else:
         intro += (f"【强制路线复评，原因：{reason}】当前路线：{route}。"
-                  "本轮只做跨路线复评，禁止继续堆同质构造。明确区分结构性否定、已有文献覆盖、成本无效、证据不充分和暂时未突破。"
+                  "本轮只做路线与任务复评，禁止仅沿用上一轮旁支任务。明确区分结构性否定、已有文献覆盖、成本无效、证据不充分和暂时未突破。"
                   "针对现有及可能的新候选，要求符合现有 GOAL，不得无授权改变输出语义或安全目标。\n"
                   "必须建立 research/ROUTE_VERDICT.json，字段：run_id（本轮注入 RUN_ID），"
-                  "outcome（EXTEND/PIVOT_PROVISIONAL/PAUSE_FOR_REVIEW/REJECT_SCOPE_LIMITED），"
+                  "outcome（REFOCUS/EXTEND/PIVOT_PROVISIONAL/PAUSE_FOR_REVIEW/REJECT_SCOPE_LIMITED），"
                   "reason（至少 24 字符），evidence_paths（项目相对证据路径列表），"
                   "requires_goal_change（布尔值），candidates（数组）。"
                   "candidate 项含 route、goal_compatible、requires_goal_change、"
@@ -400,6 +407,15 @@ def generate_directive(route: str, epoch: dict, policy: dict, review: bool, reas
                   "priority_problem、next_task、evidence_paths。"
                   "PIVOT_PROVISIONAL 只代表下一条路线的可行性预研，绝不能宣称当前路线数学上普遍不可能。"
                   "D 等需要修改 GOAL 的路线仅允许在现有目标下作可行性比较，禁止自动批准改变目标。"
-                  "判定信息不充分时选择 PAUSE_FOR_REVIEW；"
-                  "确有新的可证伪子命题但尚未到设计上限时可选择 EXTEND。\n")
-    return intro + "【原始研究任务】" + original_task
+                  "先判断最近任务对核心目标的必要性。旁支尚未审完不自动暂停全项目；"
+                  "预算尚有余额且有具体核心任务时选择 REFOCUS，保留已用轮次；"
+                  "预算耗尽但有新的直接核心任务时可选择有界 EXTEND。"
+                  "REFOCUS/EXTEND 必须填写 next_task 和 next_goal_impact（与 goal_impact 同结构，"
+                  "before 为当前缺口、after 为拟检验的明确结果，next_mainline_task 与 next_task 完全一致），"
+                  "并设置 STATE.decision=CONTINUE。只有阻断核心任务的外部输入、目标决策、资源或必要审查"
+                  "无法解决时选择 PAUSE_FOR_REVIEW，写明阻断的核心义务及原因。\n")
+    from research_focus import prompt as focus_prompt
+    if epoch.get('focus'):
+        intro += focus_prompt(epoch['focus'])
+    label = '【此前任务，仅供复评其必要性，不要求继续完成】' if review else '【此前候选任务，执行前核对主线关联】'
+    return intro + label + original_task

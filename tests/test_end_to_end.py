@@ -11,6 +11,8 @@ class SubprocessIntegrationTests(unittest.TestCase):
 import sys,re,json,pathlib,os
 prompt=sys.stdin.read();rid=re.search(r"# Autonomous cryptography research round ([^\\n]+)",prompt).group(1)
 p=pathlib.Path.cwd();sfile=p/'research/STATE.json';s=json.loads(sfile.read_text())
+anchor=re.search(r'"anchor_id": "([a-f0-9]+)"',s['next_task']).group(1)
+impact={'anchor_id':anchor,'scope':'CORE','target_obligation':'Mock core integration obligation','before':'Unresolved test condition','after':'New bound fixture evidence','next_mainline_task':'Run the next independent falsifiable integration witness after route review.'}
 (p/'proofs/e2e-evidence.md').write_text('mock subprocess evidence '+rid+'\\n')
 if os.environ.get('CRC_SMOKE_FAIL'):
  s['last_run']=rid;s['next_task']='bad partial change';sfile.write_text(json.dumps(s));sys.exit(7)
@@ -31,9 +33,10 @@ if s.get('initialization_required'):
  s.update(initialization_required=False,initialization_status='READY_FOR_PROBLEM_REVIEW',phase='INTAKE');sfile.write_text(json.dumps(s))
 (p/'reports'/f'{rid}.md').write_text('RUN_ID: '+rid+'\\n'+'E2E simulated report with traceable local evidence. '*12)
 (p/'research/ROUTE_SIGNAL.json').write_text(json.dumps({'run_id':rid,'progress_type':'REPRODUCIBLE_TEST','reason':'Saved a fresh reproducible test witness for controller integration only.','evidence_paths':['proofs/e2e-evidence.md'],'route_blocked':False}))
-(p/'research/ROUND_REVIEW.json').write_text(json.dumps({'schema_version':1,'run_id':rid,'work_kind':'PROOF','core_problem':'Mock integration obstruction','theoretical_obligation':'Check quantified integration condition','nontriviality_argument':'Fake evidence for infrastructure verification only','contribution_type':'NONE','result_status':'OPEN','evidence_paths':['proofs/e2e-evidence.md']}))
+(p/'research/ROUND_REVIEW.json').write_text(json.dumps({'schema_version':1,'run_id':rid,'work_kind':'PROOF','core_problem':'Mock integration obstruction','theoretical_obligation':'Check quantified integration condition','nontriviality_argument':'Fake evidence for infrastructure verification only','contribution_type':'NONE','result_status':'SUPPORT_ONLY' if os.environ.get('CRC_SMOKE_SUPPORT') else 'OPEN','evidence_paths':['proofs/e2e-evidence.md'],'goal_impact':impact}))
 if '【强制路线复评' in prompt:
- (p/'research/ROUTE_VERDICT.json').write_text(json.dumps({'run_id':rid,'outcome':'EXTEND','reason':'A new bounded integration test remains and justifies one procedural extension.','evidence_paths':['proofs/e2e-evidence.md'],'requires_goal_change':False,'candidates':[],'next_task':'Run the next independent falsifiable integration witness after route review.'}))
+ assert '# ROUTE REVIEW MODE' in prompt and '# AUDIT MODE' not in prompt
+ (p/'research/ROUTE_VERDICT.json').write_text(json.dumps({'run_id':rid,'outcome':'REFOCUS' if os.environ.get('CRC_SMOKE_SUPPORT') else 'EXTEND','reason':'A new bounded integration test remains and justifies a concrete core continuation.','evidence_paths':['proofs/e2e-evidence.md'],'requires_goal_change':False,'candidates':[],'next_task':impact['next_mainline_task'],'next_goal_impact':impact}))
 ''',encoding='utf8');codex.chmod(0o755)
    def call(args,env=None):
     out=subprocess.run(args,cwd=root,env=env,capture_output=True,text=True)
@@ -60,6 +63,16 @@ if '【强制路线复评' in prompt:
    assert proof==(project/'proofs/e2e-evidence.md').read_bytes()
    assert call(['git','rev-parse','HEAD']).stdout==head
    assert list((root/'state/failed_runs/integration').rglob('failure.json'))
-   print(json.dumps({'status':'PASS','scope':'real frontend-wrapper-core subprocess chain with simulated Codex only','accepted_research_rounds':2,'route_review_rounds':1,'failure_restored':True,'private_research_rounds':3,'accepted_git_commits':0,'space_in_root_path':True},indent=2))
+   del env['CRC_SMOKE_FAIL'];env['CRC_SMOKE_SUPPORT']='1'
+   call([sys.executable,str(root/'research.py'),'new','support','--goal-file',str(goal),'--title','Supporting work fixture'])
+   call([sys.executable,str(root/'research.py'),'ready','support'])
+   out=call([sys.executable,str(root/'research.py'),'run','support','--rounds','3','--route-budget','6','--no-fetch'],env)
+   ledger=json.loads((root/'state/routes/support.json').read_text());epoch=ledger['epochs'][-1]
+   assert epoch['effective_rounds']==2 and epoch['extensions_used']==0 and epoch['review_count']==1,epoch
+   assert epoch['stagnation']==0 and epoch['support_rounds']==0 and not epoch['review_pending'],epoch
+   rounds=[e for e in ledger['events'] if e['type']=='RESEARCH_ROUND']
+   assert len(rounds)==2 and all(not e['substantive_progress_claim'] for e in rounds),rounds
+   assert 'ROUTE_DECISION: REFOCUSED' in out.stdout,out.stdout[-1500:]
+   print(json.dumps({'status':'PASS','scope':'real frontend-wrapper-core subprocess chain with simulated Codex only','accepted_research_rounds':4,'route_review_rounds':2,'failure_restored':True,'support_loop_refocused':True,'accepted_git_commits':0,'space_in_root_path':True},indent=2))
 
 if __name__ == "__main__": unittest.main()

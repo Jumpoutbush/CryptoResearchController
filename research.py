@@ -645,6 +645,73 @@ def command_ready(args):
     return 0
 
 
+def command_refocus(args):
+    """Operator-directed recovery; retain scientific history and consumed budget."""
+    import runner_core
+    from engine.discovery_scheduler import active
+    from research_focus import make_focus
+    from route_budget import load_ledger, save_ledger, total_budget
+    project = resolve_project(args.project)
+    if len(args.task.strip()) < 24 or len(args.reason.strip()) < 12:
+        raise ValueError('refocus 需要具体任务（至少 24 字符）及恢复原因（至少 12 字符）。')
+    if args.problem is not None and len(args.problem.strip()) < 12:
+        raise ValueError('--problem 需明确核心问题，至少 12 个字符。')
+    if not 0 <= args.extra_rounds <= 100:
+        raise ValueError('--extra-rounds 必须在 0 至 100 之间。')
+    with project_lock(project):
+        if active(project):
+            raise ValueError('存在固定命题的研究尝试；先通过 attempt close 保留检查点并关闭该尝试。')
+        state = runner_core.validate_project(project)
+        if state.get('initialization_required'):
+            raise ValueError('请先完成项目初始化，再固定主线研究任务。')
+        policy, _, _ = policy_for(ROOT, project)
+        path, ledger, epoch = load_ledger(ROOT, project, state)
+        if epoch['last_processed_run'] != state.get('last_run'):
+            raise ValueError('last_run 与预算账本不一致；先审查并显式 route-sync。')
+        budget = total_budget(epoch, policy) + args.extra_rounds
+        if budget <= epoch['effective_rounds']:
+            raise ValueError('没有剩余研究预算；用 --extra-rounds 明确追加，已用轮次保持不变。')
+        previous = copy.deepcopy(state)
+        old_focus = copy.deepcopy(epoch['focus'])
+        problem = args.problem.strip() if args.problem else old_focus['core_problem']
+        state.update(phase=args.phase, decision='CONTINUE', priority_problem=problem,
+                     next_task=args.task.strip())
+        epoch.update(focus=make_focus(project, state, problem), review_pending=False,
+                     review_reason=None, support_rounds=0, stagnation=0)
+        epoch['operator_added_rounds'] = epoch.get('operator_added_rounds', 0) + args.extra_rounds
+        ledger['events'].append({'type': 'OPERATOR_REFOCUS', 'at': now(),
+            'reason': args.reason.strip(), 'previous_focus': old_focus, 'focus': epoch['focus'],
+            'previous_decision': previous['decision'], 'previous_task': previous['next_task'],
+            'next_task': state['next_task'], 'extra_rounds': args.extra_rounds,
+            'effective_rounds': epoch['effective_rounds'], 'budget': budget})
+        transaction = runner_core.ProjectTransaction(project).capture()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='refocus-', dir=path.parent) as temp:
+            backup = Path(temp) / 'ledger.json'
+            if path.is_file():
+                shutil.copy2(path, backup)
+            try:
+                atomic_json(project / 'research/STATE.json', state)
+                append_decision(project, '用户将任务重新聚焦核心问题',
+                    args.reason.strip() + '\n\n核心问题：' + problem + '\n\n下一任务：' + state['next_task']
+                    + f'\n\n追加研究轮数：{args.extra_rounds}；已用轮数：{epoch["effective_rounds"]}。')
+                save_ledger(path, ledger)
+                transaction.accept()
+            except BaseException:
+                transaction.rollback('OPERATOR_REFOCUS_FAILED')
+                if backup.is_file():
+                    os.replace(backup, path)
+                else:
+                    path.unlink(missing_ok=True)
+                raise
+    print('PROJECT_REFOCUSED:', project_id(project))
+    print('ROUTE_USED:', epoch['effective_rounds'], 'BUDGET:', budget)
+    print('No model call made; proof/review statuses and existing evidence were preserved.')
+    if (project / '.control/STOP_REQUESTED').exists():
+        print('STOP_REQUESTED remains set; use clear-stop explicitly before running.')
+    return 0
+
+
 def command_theory(args):
     from theory_gate import check_readiness, APPROVAL_PATH
     from research_quality import scientific_files, hash_file
@@ -697,13 +764,15 @@ def command_prompt(args):
     policy, _, _ = policy_for(ROOT, project)
     _, _, epoch = load_ledger(ROOT, project, state)
     reason = needs_review(epoch, policy)
-    review = args.audit or bool(reason)
+    route_review = bool(reason)
+    audit = args.audit and not route_review
     state = copy.deepcopy(state)
     if args.initialize:
         state.update(phase='INTAKE', initialization_required=True)
     state['next_task'] = generate_directive(selected_route(state), epoch, policy, bool(reason), reason, state['next_task'])
-    tier, _, _ = runner_core.plan_route(project, state, audit=review)
-    content = runner_core.build_prompt(project, state, 'PREVIEW_ONLY', tier, audit=review)
+    tier, _, _ = runner_core.plan_route(project, state, audit=audit or route_review)
+    content = runner_core.build_prompt(project, state, 'PREVIEW_ONLY', tier,
+                                      audit=audit, route_review=route_review)
     if args.output:
         destination = Path(args.output).expanduser().resolve()
         if destination.exists(): raise ValueError('提示词输出文件已存在，请使用新文件名。')
@@ -811,6 +880,14 @@ def parser():
     add_project(c); c.add_argument("--audit", action="store_true"); c.add_argument("--output"); c.add_argument('--initialize', action='store_true')
     c = command("ready", command_ready, "填写材料后显式启用项目")
     add_project(c); c.add_argument("--task", help="启用时明确下一轮任务"); c.add_argument("--phase", choices=("LITERATURE","NOVELTY","FALSIFICATION","CONSTRUCTION","CORRECTNESS","PROOF","SECURITY","COST","IMPLEMENTATION","SYSTEM_TEST","EXPERIMENT","WRITING","REVIEW"))
+    c = command('refocus', command_refocus, '显式恢复核心任务，保留证据、审查状态与已用预算')
+    add_project(c)
+    c.add_argument('--problem', help='核心研究问题；默认沿用控制器已固定的主线')
+    c.add_argument('--task', required=True)
+    c.add_argument('--reason', required=True)
+    c.add_argument('--extra-rounds', type=int, default=0, help='显式追加轮数，不清零已用预算')
+    c.add_argument('--phase', default='FALSIFICATION',
+                   choices=('FALSIFICATION', 'CONSTRUCTION', 'CORRECTNESS', 'SECURITY', 'COST', 'PROOF', 'NOVELTY', 'LITERATURE'))
     from engine.cli import add_commands
     add_commands(sub, add_project, common_run_options)
     return p

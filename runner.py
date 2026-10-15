@@ -165,17 +165,31 @@ def record_round(project: Path, ledger: dict, epoch: dict, policy: dict,
     epoch["last_processed_run"] = run_id
     from research_quality import validate_round, policy_for as quality_policy, SUPPORT_KINDS
     review = validate_round(project, run_id, before_hashes)
-    support = review.get('work_kind') in SUPPORT_KINDS
+    from research_focus import ensure_focus, assess_progress
+    ensure_focus(project, epoch, state_read(project))
+    relevance = assess_progress(project, epoch, review, artifacts)
+    if relevance['mainline_progress'] and not progress:
+        relevance.update(mainline_progress=False,
+                         reason='ROUTE_SIGNAL lacks a substantive progress claim with fresh evidence')
+    progress = progress and relevance['mainline_progress']
+    support = (review.get('work_kind') in SUPPORT_KINDS
+               or review.get('result_status') == 'SUPPORT_ONLY'
+               or relevance['scope'] in {'SUPPORT', 'UNCLASSIFIED'})
     epoch['support_rounds'] = epoch.get('support_rounds', 0) + 1 if support else 0
-    if support or review.get('result_status') == 'NO_PROGRESS':
+    if support or review.get('result_status') == 'NO_PROGRESS' or not progress:
         progress, blocked = False, False
+    if progress:
+        epoch.setdefault('mainline_fingerprints', []).append(relevance['fingerprint'])
     epoch["effective_rounds"] += 1
     epoch["stagnation"] = 0 if progress else epoch["stagnation"] + 1
     ledger["events"].append({"type": "RESEARCH_ROUND", "route": epoch["route"],
                              "run_id": run_id, "effective_rounds": epoch["effective_rounds"],
                              "substantive_progress_claim": progress, "evidence_type": kind,
                              "changed_evidence_paths": artifacts, "at": stamp(),
+                             "goal_alignment": relevance,
                              "note": "Progress is only a procedural signal; proofs and novelty remain unverified."})
+    print('MAINLINE_SCOPE:', relevance['scope'], 'MAINLINE_PROGRESS:', progress,
+          'REASON:', relevance['reason'])
     if epoch['support_rounds'] >= quality_policy(project)['max_consecutive_support_rounds']:
         mark_review(epoch, ledger, 'support_work_without_theoretical_progress')
     elif blocked and policy["automatic_falsification"]:
@@ -203,6 +217,9 @@ def apply_review(project: Path, ledger: dict, epoch: dict, policy: dict, after: 
                              "route": epoch["route"], "at": stamp()})
     try:
         verdict = load_verdict(project, run_id)
+        if verdict['outcome'] in {'REFOCUS', 'EXTEND'}:
+            from research_focus import validate_next_task
+            validate_next_task(verdict, epoch['focus'])
     except (ValueError, OSError) as exc:
         decision_pause(project, {}, "裁决文件缺失或格式错误：" + str(exc))
         ledger["events"].append({"type": "ROUTE_REVIEW_INVALID", "run_id": run_id,
@@ -223,6 +240,18 @@ def apply_review(project: Path, ledger: dict, epoch: dict, policy: dict, after: 
         decision_pause(project, verdict, "候选要求改变 GOAL 的不可放宽条件")
         epoch["review_pending"] = False
         return "PAUSED_GOAL_CHANGE"
+    if outcome == 'REFOCUS':
+        if epoch['effective_rounds'] >= total_budget(epoch, policy):
+            decision_pause(project, verdict, '剩余预算为零；REFOCUS 不追加预算，需有界延期裁决')
+            epoch['review_pending'] = False
+            return 'PAUSED_REFOCUS_BUDGET_EXHAUSTED'
+        epoch.update(review_pending=False, review_reason=None, stagnation=0, support_rounds=0)
+        revised = state_read(project)
+        revised.update(decision='CONTINUE', phase='FALSIFICATION', next_task=verdict['next_task'])
+        atom_json(state_path(project), revised)
+        ledger['events'].append({'type': 'MAINLINE_REFOCUSED', 'run_id': run_id,
+                                'effective_rounds': epoch['effective_rounds'], 'at': stamp()})
+        return 'REFOCUSED'
     if outcome == "EXTEND":
         if epoch["extensions_used"] >= policy["max_extensions"]:
             decision_pause(project, verdict, "已达到最大延期次数")
@@ -232,10 +261,11 @@ def apply_review(project: Path, ledger: dict, epoch: dict, policy: dict, after: 
         epoch["review_pending"] = False
         epoch["review_reason"] = None
         epoch["stagnation"] = 0
+        epoch['support_rounds'] = 0
         revised = state_read(project)
         revised["decision"] = "CONTINUE"
-        revised["next_task"] = verdict.get("next_task") if isinstance(verdict.get("next_task"), str) and len(verdict["next_task"]) >= 24 else (
-            "在批准追加研究预算后，选择一个新颖且可证伪的最小子命题，先查新并尝试严格反例；不得重复本轮无效实验。")
+        revised['phase'] = 'FALSIFICATION'
+        revised["next_task"] = verdict['next_task']
         atom_json(state_path(project), revised)
         ledger["events"].append({"type": "EXTENSION_GRANTED", "route": epoch["route"],
                                  "new_total_budget": total_budget(epoch, policy), "at": stamp()})
@@ -313,6 +343,8 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
     if epoch['last_processed_run'] != before.get('last_run'):
         return 3, ('ROUTE_STATE_DRIFT: a different runner or manual edit changed STATE.last_run. '
                    'Inspect evidence and rerun with --route-sync if intentional.')
+    from research_focus import require_current
+    require_current(project, epoch, before)
     reason = needs_review(epoch, policy)
     from engine import discovery_scheduler as discovery
     attempt = discovery.check(project)
@@ -346,7 +378,9 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         print('MODE:', 'ROUTE_REVIEW' if reviewing else 'RESEARCH', 'ROUTE:', epoch['route'],
               'USED:', epoch['effective_rounds'], 'BUDGET:', total_budget(epoch, policy), flush=True)
         command = list(core_cmd)
-        if reviewing and '--audit' not in command: command.append('--audit')
+        if reviewing:
+            command = [part for part in command if part != '--audit']
+            command.append('--route-review')
         code = run_child(command)
         if code:
             outcome = f'NATIVE_CORE_FAILED exit_code={code}'

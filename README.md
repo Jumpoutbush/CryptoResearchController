@@ -15,6 +15,7 @@ cd D:\CryptoResearchController
 - [执行手册](docs/USER_MANUAL.md)：安装、命令、参数、想法、论文、新项目、Git 和故障处理。
 - [框架设计](docs/ARCHITECTURE.md)：统一内容、研究闭环、模板扩展和此次修复。
 - [整合与验证记录](docs/INTEGRATION_REPORT.md)：清理、证据保留、检查结果及验证范围。
+- [主线偏移修复与恢复](docs/MAINLINE_FOCUS.md)：区分路线复评和证明审查，约束旁支预算，并用 `refocus` 显式恢复核心任务。
 
 新增研究想法：`research.cmd ideas add secagg-research --title "想法标题" --file D:\Materials\idea.md`。选择后单独执行研究。新建项目：`research.cmd new my-project --goal-file D:\Materials\goal.md --title "研究主题"`，材料补齐后调用 `ready` 与 `run`。
 

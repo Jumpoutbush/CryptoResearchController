@@ -11,6 +11,7 @@ import configuration
 import route_budget
 import runner
 import runner_core
+import research_focus
 
 SOURCE = Path(__file__).resolve().parents[1]
 
@@ -59,7 +60,13 @@ class RunnerTests(unittest.TestCase):
                 'publication_status': 'NOT_ESTABLISHED'}
 
     def current(self):
-        return json.loads((self.project / 'research/STATE.json').read_text())
+        return json.loads((self.project / 'research/STATE.json').read_text(encoding='utf-8-sig'))
+
+    def impact(self, task='Prove the remaining quantified condition using the bound evidence.'):
+        return {'anchor_id': research_focus.make_focus(self.project, self.current())['anchor_id'],
+                'scope': 'CORE', 'target_obligation': 'Core quantified condition',
+                'before': 'Missing exact integer invariant', 'after': 'A counterexample excludes one core candidate',
+                'next_mainline_task': task}
 
     def complete(self, rid='round-1', *, route=None, next_task=None):
         state = self.current()
@@ -76,7 +83,8 @@ class RunnerTests(unittest.TestCase):
         put(self.project / 'research/ROUND_REVIEW.json', {'schema_version':1,'run_id':rid,'work_kind':'PROOF',
             'core_problem':'Decisive fixed-target mathematical obstruction','theoretical_obligation':'Prove the remaining quantified condition',
             'nontriviality_argument':'Existing lemma does not cover the original integer constraints',
-            'contribution_type':'NONE','result_status':'OPEN','evidence_paths':['proofs/new.md']})
+            'contribution_type':'NONE','result_status':'OPEN','evidence_paths':['proofs/new.md'],
+            'goal_impact': self.impact()})
 
     def advance(self, child):
         policy, _, _ = route_budget.policy_for(self.root, self.project)
@@ -103,7 +111,7 @@ class RunnerTests(unittest.TestCase):
         moved.parent.mkdir()
         shutil.move(self.project, moved)
         moved_policy, _, _ = route_budget.policy_for(self.root, moved)
-        _, _, moved_epoch = route_budget.load_ledger(self.root, moved, json.loads((moved / 'research/STATE.json').read_text()))
+        _, _, moved_epoch = route_budget.load_ledger(self.root, moved, json.loads((moved / 'research/STATE.json').read_text(encoding='utf-8-sig')))
         self.assertEqual(policy['initial_round_budget'], 11)
         self.assertEqual(moved_policy['initial_round_budget'], 11)
         self.assertEqual(moved_epoch['effective_rounds'], 3)
@@ -111,7 +119,7 @@ class RunnerTests(unittest.TestCase):
     def test_budget_updates_preserve_other_settings(self):
         put(self.root / 'config/projects/subject.json', {'execution': {'max_seconds': 1800}})
         path = route_budget.set_project_override(self.root, self.project, {'initial_round_budget': 10})
-        updated = json.loads(path.read_text())
+        updated = json.loads(path.read_text(encoding='utf-8-sig'))
         self.assertEqual(updated['execution']['max_seconds'], 1800)
         self.assertEqual(updated['route_policy']['initial_round_budget'], 10)
 
@@ -129,7 +137,7 @@ class RunnerTests(unittest.TestCase):
         def child(command):
             task = self.current()['next_task']
             self.complete(next_task=task)
-            (self.project / 'proofs/original.md').write_text('Invalid replacement')
+            (self.project / 'proofs/original.md').write_text('Invalid replacement', encoding='utf-8')
             return 0
         result, _, epoch = self.advance(child)
         self.assertEqual(result[0], 3)
@@ -138,7 +146,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(self.current()['decision'], 'NEEDS_REVIEW')
         self.assertFalse((self.project / 'proofs/new.md').exists())
         self.assertFalse((self.project / 'reports/round-1.md').exists())
-        self.assertEqual((self.project / 'proofs/original.md').read_text(), 'Accepted original evidence.\n')
+        self.assertEqual((self.project / 'proofs/original.md').read_text(encoding='utf-8-sig'), 'Accepted original evidence.\n')
         self.assertTrue(list((self.root / 'state/failed_runs').rglob('new.md')))
 
     def test_wrapper_restores_unauthorized_route_change(self):
@@ -150,22 +158,24 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(self.current()['research_route'], 'C/TEST')
         self.assertEqual(self.current()['last_run'], None)
 
-    def test_review_uses_audit_and_commits_final_extension(self):
+    def test_review_uses_route_review_and_commits_final_extension(self):
         policy, _, _ = route_budget.policy_for(self.root, self.project)
         path, ledger, epoch = route_budget.load_ledger(self.root, self.project, self.current())
         epoch['effective_rounds'] = policy['initial_round_budget']
         route_budget.save_ledger(path, ledger)
         def child(command):
-            self.assertIn('--audit', command)
+            self.assertIn('--route-review', command)
+            self.assertNotIn('--audit', command)
             self.complete()
             put(self.project / 'research/ROUTE_VERDICT.json', {'run_id': 'round-1', 'outcome': 'EXTEND',
                 'reason': 'A concrete new subclaim has been identified with reproducible proof evidence.',
                 'evidence_paths': ['proofs/new.md'], 'requires_goal_change': False,
-                'next_task': 'Prove the new quantified subclaim and retain an independently checkable certificate.'})
+                'next_task': 'Prove the new quantified subclaim and retain an independently checkable certificate.',
+                'next_goal_impact': self.impact('Prove the new quantified subclaim and retain an independently checkable certificate.')})
             return 0
         def checkpoint(project, rid):
             self.assertEqual(self.current()['decision'], 'CONTINUE')
-            self.assertEqual(json.loads(path.read_text())['epochs'][-1]['extensions_used'], 1)
+            self.assertEqual(json.loads(path.read_text(encoding='utf-8-sig'))['epochs'][-1]['extensions_used'], 1)
             return 'FINAL_CHECKPOINT'
         with mock.patch.object(runner, 'run_child', side_effect=child), mock.patch.object(runner_core, 'git_checkpoint', side_effect=checkpoint):
             self.assertEqual(runner.advance_one(self.project, policy, path, ledger, epoch, ['python', 'core']), (0, 'EXTENDED'))
@@ -190,7 +200,7 @@ class RunnerTests(unittest.TestCase):
         with mock.patch.object(runner_core.shutil, 'which', return_value='/fake/codex'), mock.patch.object(runner_core, 'codex_run', side_effect=codex):
             self.assertEqual(runner_core.run_round(self.project, round_num=1, seconds=30, skip_fetch=True), 2)
         self.assertEqual(self.current(), original)
-        self.assertTrue((self.project / 'GOAL.md').read_text().startswith('# Fixed'))
+        self.assertTrue((self.project / 'GOAL.md').read_text(encoding='utf-8-sig').startswith('# Fixed'))
         self.assertFalse((self.project / 'proofs/new.md').exists())
         self.assertFalse((self.project / 'research/GATES.json').exists())
         self.assertTrue(list((self.root / 'state/failed_runs').rglob('GATES.json')))
@@ -274,12 +284,12 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result, 'PIVOT_PROVISIONAL')
         self.assertEqual(self.current()['selected_idea'], None)
         self.assertEqual(self.current()['origin_idea'], pin)
-        self.assertEqual(json.loads((self.project / 'ideas/INDEX.json').read_text())['active_idea'], None)
+        self.assertEqual(json.loads((self.project / 'ideas/INDEX.json').read_text(encoding='utf-8-sig'))['active_idea'], None)
 
     def test_failed_registered_check_rejects_and_restores_round(self):
         original = self.current()
         put(self.project / 'scripts/check.py', 'raise SystemExit(7)\n')
-        manifest = json.loads((self.project / 'PROJECT.json').read_text())
+        manifest = json.loads((self.project / 'PROJECT.json').read_text(encoding='utf-8-sig'))
         manifest['checks'] = [['scripts/check.py']]
         put(self.project / 'PROJECT.json', manifest)
         def codex(project, prompt, rid, *args, **kwargs):
@@ -289,7 +299,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(runner_core.run_round(self.project, round_num=1, seconds=30, skip_fetch=True), 5)
         self.assertEqual(self.current(), original)
         self.assertFalse((self.project / 'proofs/new.md').exists())
-        status = json.loads((self.root / 'logs/subject/latest-status.json').read_text())
+        status = json.loads((self.root / 'logs/subject/latest-status.json').read_text(encoding='utf-8-sig'))
         self.assertEqual(status['registered_checks'][0]['exit_code'], 7)
         self.assertTrue(Path(status['registered_checks'][0]['log_path']).is_file())
 
