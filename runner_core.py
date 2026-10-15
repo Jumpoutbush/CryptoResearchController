@@ -34,12 +34,13 @@ CRITICAL = {'FALSIFICATION', 'PROOF', 'CORRECTNESS', 'SECURITY', 'REVIEW'}
 PROTECTED = ('GOAL.md', 'AGENTS.md', 'MODEL_POLICY.json', 'PROJECT.json',
              'PROJECT_POLICY.json', 'RESEARCH_PROFILE.json',
              'literature/queries.json', 'prompts/continue.md', '.gitignore',
-             'experiments/reference_oracle.py', 'experiments/test_reference_oracle.py')
+             'experiments/reference_oracle.py', 'experiments/test_reference_oracle.py',
+             'research/THEORY_READINESS.json')
 PROTECTED_DIRS = ('ideas', 'inputs', 'literature/pdfs', 'scripts',
-                  'experiments/fixtures', 'experiments/historical')
+                  'experiments/fixtures', 'experiments/historical', 'prompts', 'research/discovery')
 PHASES = {'INTAKE', 'LITERATURE', 'NOVELTY', 'FALSIFICATION', 'CONSTRUCTION',
           'CORRECTNESS', 'SECURITY', 'COST', 'PROOF', 'PROTOCOL', 'EXPERIMENT',
-          'WRITING', 'REVIEW', 'BLOCKED', 'DONE'}
+          'WRITING', 'REVIEW', 'BLOCKED', 'DONE', 'IMPLEMENTATION', 'SYSTEM_TEST'}
 DECISIONS = {'CONTINUE', 'PIVOT', 'NEEDS_REVIEW', 'PAUSE', 'STOP'}
 EFFORTS = {'low', 'medium', 'high', 'xhigh', 'max', 'ultra'}
 RULES = (
@@ -48,6 +49,9 @@ RULES = (
     '05_SECURITY_PROOFS.md', '06_COST_EXPERIMENT.md',
     '07_EVIDENCE_GATES.md', '08_WRITING_REVIEW.md', '09_EXECUTION_CONTRACT.md',
     '10_PROJECT_IDEAS.md', '11_STATEFUL_REVIEW.md',
+    '12_TECHNICAL_LITERATURE_REVIEW.md', '13_THEORETICAL_CONTRIBUTION.md',
+    '14_IDEA_INTEGRATION.md', '15_RESEARCH_RECEIPTS.md', '16_THEORY_BEFORE_IMPLEMENTATION.md',
+    '17_MATHEMATICAL_DISCOVERY.md',
 )
 DOMAIN_RULES = {'ntru_lattice': 'NTRU_LATTICE.md', 'mpc_secagg': 'MPC_SECAGG.md'}
 
@@ -129,7 +133,7 @@ def registered_checks(project: pathlib.Path):
         if type(timeout) is not int or not 1 <= timeout <= 600:
             raise RuntimeError('Registered check timeout must be 1..600 seconds')
         output.append({'argv': [sys.executable, str(script), *argv[1:]], 'script': script.relative_to(project.resolve()).as_posix(),
-                       'timeout_seconds': timeout})
+                       'timeout_seconds': timeout, 'kind': spec.get('kind', 'LOCAL_VALIDATION') if isinstance(spec,dict) else 'LOCAL_VALIDATION'})
     return output
 
 
@@ -137,6 +141,9 @@ def run_project_checks(project: pathlib.Path, rid: str, deadline: float):
     from route_budget import project_key
     records = []
     for number, spec in enumerate(registered_checks(project), 1):
+        if spec['kind'] == 'SYSTEM_TEST':
+            from theory_gate import require_system_ready
+            require_system_ready(project)
         remaining = deadline - time.monotonic()
         if remaining <= 0: raise TimeoutError('Research round budget exhausted before registered checks')
         logpath = ROOT / 'logs' / project_key(project) / f'{rid}-check-{number:02d}.log'
@@ -174,7 +181,8 @@ def plan_route(project: pathlib.Path, state: dict, *, audit=False, model=None, e
     phases = config.get('critical_phases', sorted(CRITICAL))
     if not isinstance(phases, list) or any(p not in PHASES for p in phases):
         raise RuntimeError('model_policy critical_phases must contain supported phases')
-    tier = 'critical' if audit or state.get('phase') in phases else 'routine'
+    from engine.discovery_scheduler import active as active_attempt
+    tier = 'critical' if audit or active_attempt(project) or state.get('phase') in phases else 'routine'
     chosen = config.get(tier, {})
     if not isinstance(chosen, dict):
         raise RuntimeError(f'model_policy {tier} must be an object')
@@ -312,25 +320,49 @@ def project_input_context(project: pathlib.Path) -> str:
             summaries = [{key: i.get(key) for key in ('id', 'title', 'version', 'route')}
                          for i in records if isinstance(i, dict)]
             chunks.append('# Available user research ideas\n' + json.dumps(summaries, ensure_ascii=False, indent=2))
-            if isinstance(selected, dict):
-                card = next((i for i in records if isinstance(i, dict) and i.get('id') == selected.get('id')), None)
-                if not card: raise RuntimeError('STATE selected_idea does not exist in ideas/INDEX.json')
-                revisions = card.get('revisions', [])
-                revision = next((r for r in revisions if isinstance(r, dict) and r.get('version') == selected.get('version')), None)
+            current_state = load_json(project / 'research/STATE.json', {})
+            supplements = current_state.get('supporting_ideas', [])
+            if not isinstance(supplements, list): raise RuntimeError('supporting_ideas must be a list')
+            pins = ([('primary', selected)] if isinstance(selected, dict) else [])
+            pins += [('supporting', pin) for pin in supplements]
+            for role, pin in pins:
+                if not isinstance(pin, dict): raise RuntimeError('Each idea pin must be an object')
+                card = next((i for i in records if isinstance(i, dict) and i.get('id') == pin.get('id')), None)
+                if not card: raise RuntimeError('Pinned idea does not exist in ideas/INDEX.json')
+                revision = next((r for r in card.get('revisions', []) if isinstance(r, dict) and r.get('version') == pin.get('version')), None)
                 if not revision: raise RuntimeError('Pinned research idea version is missing')
-                chunks.append('# Selected research idea (pinned version)\n' + json.dumps(selected, ensure_ascii=False))
+                chunks.append('# Pinned user idea (' + role + ')\n' + json.dumps(pin, ensure_ascii=False))
                 rel = revision.get('file')
                 if not isinstance(rel, str): raise RuntimeError('Pinned idea revision has no file')
                 candidate = (project / rel).resolve()
                 try: candidate.relative_to((project / 'ideas').resolve())
-                except ValueError as exc: raise RuntimeError('Active idea path escapes ideas/') from exc
+                except ValueError as exc: raise RuntimeError('Idea path escapes ideas/') from exc
                 if not candidate.is_file(): raise RuntimeError('Pinned idea revision file is missing')
                 expected = revision.get('sha256')
                 if expected and digest_file(candidate) != expected:
-                    raise RuntimeError('Pinned idea revision checksum changed; update it through the idea command')
+                    raise RuntimeError('Pinned idea checksum changed; update through the idea command')
                 text = read_text(candidate)
-                chunks.append(text[:18000] + (f'\n[Continue reading the full idea at {rel}]' if len(text) > 18000 else ''))
+                chunks.append(text[:18000] + (f'\n[Read full idea at {rel}]' if len(text) > 18000 else ''))
     return '\n\n'.join(chunks)
+
+
+def stage_instructions(project: pathlib.Path, phase: str, audit=False) -> str:
+    stage = 'REVIEW' if audit else phase
+    if stage not in PHASES: raise RuntimeError('Invalid prompt stage')
+    root_file = ROOT / 'prompts/stages' / (stage + '.md')
+    project_file = project / 'prompts/stages' / (stage + '.md')
+    pieces = []
+    if root_file.is_file(): pieces.append('# Common stage instructions\n' + read_text(root_file))
+    if project_file.is_file(): pieces.append('# Project stage instructions\n' + read_text(project_file))
+    if audit:
+        extra = project / 'prompts/independent_review.md'
+        if extra.is_file(): pieces.append('# Project review instructions\n' + read_text(extra))
+    if phase == 'NOVELTY':
+        common = ROOT / 'prompts/theorem_novelty.md'
+        if common.is_file(): pieces.append('# Theorem-level novelty\n' + read_text(common))
+        extra = project / 'prompts/novelty_audit.md'
+        if extra.is_file(): pieces.append('# Project novelty audit instructions\n' + read_text(extra))
+    return '\n\n'.join(pieces)
 
 
 def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, audit=False) -> str:
@@ -357,12 +389,16 @@ def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, aud
             'literature/NOVELTY_GAP.md', 'research/DECISION_LOG.md')),
         '# Latest report (for continuity; inspect cited source files)\n' + last,
         '# Project continuation instructions\n' + read_text(project / 'prompts/continue.md'),
+        stage_instructions(project, state['phase'], audit=audit),
         project_input_context(project),
+        __import__('engine.initialization', fromlist=['context']).context(project, state),
+        __import__('engine.deep_reasoning', fromlist=['context']).context(project),
         '# Research ideas supplied by the user\n' + read_text(project / 'ideas/INDEX.md'),
         '# Input manifest\n' + read_text(project / 'inputs/MANIFEST.json'),
         ('# AUDIT MODE\nIndependently and adversarially challenge the last claimed result; '
          'do not add a new main construction; identify the earliest failed gate. '
          if audit else '# RESEARCH MODE\nActively execute the highest-value test, proof step, or experiment.'),
+        __import__('research_quality').prompt_contract(technical_review=audit or state['phase'] in {'LITERATURE','NOVELTY','REVIEW'}),
         '# Enforced round output contract\n'
         + '\n'.join([
             f'1. Save a substantive report to reports/{rid}.md including a literal RUN_ID: {rid}.',
@@ -566,6 +602,7 @@ def codex_run(project, prompt, rid, seconds, model, effort, *, codex_bin='codex'
     for key in ('OPENAI_API_KEY', 'CODEX_API_KEY', 'CODEX_ACCESS_TOKEN'):
         env.pop(key, None)
     env.update({'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8', 'GIT_TERMINAL_PROMPT': '0'})
+    write_atomic(logfile.with_suffix('.prompt.md'), prompt)
     with logfile.open('w', encoding='utf-8') as log:
         log.write('CLI: ' + ' '.join(command[:-1]) + '\n')
         log.flush()
@@ -672,7 +709,7 @@ def pro_handoff(project, state):
         'PROJECT.json', 'GOAL.md', 'RESEARCH_PROFILE.json', 'research/CLAIMS.md',
         'research/CLAIM_INDEX.json', 'research/PROOF_OBLIGATIONS.json',
         'research/FAILED_PATHS.md', 'research/BASELINES.md', 'research/COST_MODEL.md',
-        'research/COST_LEDGER.json', 'research/GATES.md', 'research/GATES.json',
+        'research/COST_LEDGER.json', 'research/GATES.md', 'research/GATES.json', 'research/ROUND_REVIEW.json',
         'literature/SEED_PAPERS.json', 'literature/RELATED_WORK.md',
         'literature/NOVELTY_GAP.md', 'literature/pdf_index.json', 'reports/LATEST.md',
     )
@@ -693,7 +730,13 @@ def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
     if state.get('decision', 'CONTINUE') in STOP:
         print('STOP_BY_DECISION:', state.get('decision'), flush=True)
         return 3
+    from theory_gate import SYSTEM_PHASES, require_system_ready
+    if state['phase'] in SYSTEM_PHASES and not audit: require_system_ready(project)
     rid = run_id(round_num)
+    from engine import discovery_scheduler as discovery
+    discovery.check(project)
+    from engine.claim_graph import refresh as refresh_claim_graph
+    refresh_claim_graph(project)
     print(f'ROUND {rid}: {tier} / {chosen_model} / {chosen_effort}', flush=True)
     deadline = time.monotonic() + seconds
     transaction = ProjectTransaction(project, rid).capture()
@@ -705,25 +748,43 @@ def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
               'research_validity_certified': False}
     code = 5
     try:
-        if not skip_fetch:
+        initial_queries = load_json(project / 'literature/queries.json', {})
+        defer_intake_fetch = state.get('initialization_required') and initial_queries.get('generated_initial_query') is True
+        if not skip_fetch and not defer_intake_fetch:
             lit = update_literature(project, offline=offline)
             print('LITERATURE:', lit.get('status'), 'candidates:', lit.get('candidate_count'), flush=True)
         transaction.freeze_protected()
+        from theory_gate import SYSTEM_PHASES, require_system_ready
+        if state['phase'] in SYSTEM_PHASES and not audit: require_system_ready(project)
         prompt = build_prompt(project, state, rid, tier, audit=audit)
         codex_path = shutil.which('codex')
         if not codex_path: raise RuntimeError('Codex CLI not found in PATH')
         remaining = deadline - time.monotonic()
         if remaining <= 0: raise TimeoutError('Research round budget exhausted before model execution')
+        discovery.begin_call(project, rid)
         exitcode, logpath = codex_run(project, prompt, rid, remaining, chosen_model, chosen_effort, codex_bin=codex_path)
         changed = transaction.protected_changes()
         report_path = project / 'reports' / f'{rid}.md'
         content = read_text(report_path)
         has_report = report_path.is_file() and len(content) >= 250 and f'RUN_ID: {rid}' in content
         new_state = validate_project(project)
-        idea_preserved = new_state.get('selected_idea') == state.get('selected_idea')
+        idea_preserved = (new_state.get('selected_idea') == state.get('selected_idea') and
+                          new_state.get('supporting_ideas', []) == state.get('supporting_ideas', []))
         state_ok = new_state.get('last_run') == rid and idea_preserved
         gate_summary = audit_evidence(project)
         success = exitcode == 0 and has_report and state_ok and not changed and not gate_summary.get('broken_evidence_links')
+        if success:
+            if state.get('initialization_required'):
+                __import__('engine.initialization', fromlist=['validate']).validate(project, rid)
+            from engine.deep_reasoning import validate_checkpoint
+            checkpoint = validate_checkpoint(project, rid)
+            from research_quality import validate_round
+            baseline = {rel: value['sha256'] for rel, value in transaction.manifest.items()}
+            receipt = validate_round(project, rid, baseline)
+            from theory_gate import validate_code_changes
+            validate_code_changes(project, baseline)
+            status['research_quality'] = {'work_kind': receipt.get('work_kind'), 'result_status': receipt.get('result_status'),
+                                        'contribution_type': receipt.get('contribution_type'), 'scope': 'STRUCTURAL_EVIDENCE_CHECK'}
         checks = run_project_checks(project, rid, deadline) if success else []
         success = success and all(item['exit_code'] == 0 for item in checks)
         # Registered checks must also preserve user inputs and fixed baselines.
@@ -733,6 +794,13 @@ def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
             new_state = validate_project(project)
             success = success and new_state.get('last_run') == rid
             success = success and new_state.get('selected_idea') == state.get('selected_idea')
+            success = success and new_state.get('supporting_ideas', []) == state.get('supporting_ideas', [])
+            if success:
+                validate_round(project, rid, baseline)
+                validate_code_changes(project, baseline)
+                checkpoint = validate_checkpoint(project, rid)
+                if state.get('initialization_required'):
+                    __import__('engine.initialization', fromlist=['validate']).validate(project, rid)
             gate_summary = audit_evidence(project)
             success = success and not gate_summary.get('broken_evidence_links')
         status['registered_checks'] = checks
@@ -758,6 +826,10 @@ def run_round(project, *, round_num, seconds, skip_fetch=False, audit=False,
             status['failure_archive'] = transaction.rollback(status.get('error', 'Native round rejected'))
         elif success:
             transaction.accept()
+        if success and not external and state.get('initialization_required'):
+            __import__('engine.initialization', fromlist=['finalize']).finalize(project, rid)
+        discovery.finish_call(project, rid, accepted=success,
+            checkpoint=checkpoint if success else None, pending_wrapper=external)
         status['git_checkpoint'] = (git_checkpoint(project, rid) if success and os.environ.get('CRC_DEFER_CHECKPOINT') != '1'
                                     else 'DEFERRED_TO_WRAPPER' if success else 'SKIPPED_UNSUCCESSFUL_ROUND')
         directory = controller_home() / 'logs' / project_key(project)

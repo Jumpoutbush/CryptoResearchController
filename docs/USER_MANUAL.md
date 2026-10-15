@@ -301,3 +301,20 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 - [命令行参考](https://learn.chatgpt.com/docs/developer-commands?surface=cli)
 
 两个研究项目继续保持原先未闭合的证明与发表状态，整合检查不改变研究结论等级。
+
+## 十、v3.1 工作流更新
+
+新增想法补充、原文技术裁决、理论质量及系统开发门禁请以 [v3.1 使用说明](RESEARCH_WORKFLOW_V3.1.md) 为准。新项目默认先完成 INTAKE；系统阶段需 theory approve。个人项目不进入框架更新包，已忽略的研究目录也不会自动进入框架 Git 检查点。
+# v3.2 新增操作入口
+
+完整的新项目操作、初始化文件清单、连续证明尝试、Lean 和反例接口见 [数学发现执行手册](MATHEMATICAL_DISCOVERY_V3.2.md)。已有项目可以继续原命令，新建项目推荐：
+
+```powershell
+.\research.cmd new my-project --idea-file D:\Materials\idea.md
+.\research.cmd initialize my-project
+.\research.cmd problem import my-project --file projects/my-project/research/PROBLEM_PROPOSAL.json --reason "已核对量词和约束"
+.\research.cmd attempt start my-project --problem P-001
+.\research.cmd attempt run my-project --rounds 2
+```
+
+初始化提示词随新项目复制到 prompts/initialize_from_idea.md。核对实际问题编号；有阻塞资料缺口时先补齐。上面的问题登记命令应在审核草案后执行。普通 PowerShell 可调用 research.cmd，无需管理员或修改执行策略。

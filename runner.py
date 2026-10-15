@@ -163,6 +163,12 @@ def record_round(project: Path, ledger: dict, epoch: dict, policy: dict,
     progress, kind, artifacts, blocked = check_signal(project, run_id, before_hashes)
     epoch["counted_run_ids"].append(run_id)
     epoch["last_processed_run"] = run_id
+    from research_quality import validate_round, policy_for as quality_policy, SUPPORT_KINDS
+    review = validate_round(project, run_id, before_hashes)
+    support = review.get('work_kind') in SUPPORT_KINDS
+    epoch['support_rounds'] = epoch.get('support_rounds', 0) + 1 if support else 0
+    if support or review.get('result_status') == 'NO_PROGRESS':
+        progress, blocked = False, False
     epoch["effective_rounds"] += 1
     epoch["stagnation"] = 0 if progress else epoch["stagnation"] + 1
     ledger["events"].append({"type": "RESEARCH_ROUND", "route": epoch["route"],
@@ -170,7 +176,9 @@ def record_round(project: Path, ledger: dict, epoch: dict, policy: dict,
                              "substantive_progress_claim": progress, "evidence_type": kind,
                              "changed_evidence_paths": artifacts, "at": stamp(),
                              "note": "Progress is only a procedural signal; proofs and novelty remain unverified."})
-    if blocked and policy["automatic_falsification"]:
+    if epoch['support_rounds'] >= quality_policy(project)['max_consecutive_support_rounds']:
+        mark_review(epoch, ledger, 'support_work_without_theoretical_progress')
+    elif blocked and policy["automatic_falsification"]:
         mark_review(epoch, ledger, "evidence_backed_route_blocker")
     else:
         reason = needs_review(epoch, policy)
@@ -306,6 +314,12 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         return 3, ('ROUTE_STATE_DRIFT: a different runner or manual edit changed STATE.last_run. '
                    'Inspect evidence and rerun with --route-sync if intentional.')
     reason = needs_review(epoch, policy)
+    from engine import discovery_scheduler as discovery
+    attempt = discovery.check(project)
+    if attempt and (reason or epoch['review_pending'] or '--audit' in core_cmd):
+        return 3, 'ATTEMPT_PAUSED_FOR_ROUTE_REVIEW: close the fixed attempt and review the route; no model call made'
+    if before.get('initialization_required') and (reason or epoch['review_pending'] or '--audit' in core_cmd):
+        return 3, 'INITIALIZATION_PAUSED_FOR_ROUTE_REVIEW: review existing route budget before reinitialization; no model call made'
     if reason and not epoch['review_pending']:
         mark_review(epoch, ledger, reason)
         save_ledger(ledger_path, ledger)
@@ -315,6 +329,9 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         state['decision'] = 'NEEDS_REVIEW'
         atom_json(state_path(project), state)
         return 0, 'PAUSED_ROUTE_REVIEW_DISABLED'
+    from theory_gate import SYSTEM_PHASES, require_system_ready
+    if before['phase'] in SYSTEM_PHASES and not reviewing and '--audit' not in core_cmd:
+        require_system_ready(project)
     before_hashes = evidence_snapshot(project)
     transaction = ProjectTransaction(project).capture()
     accepted = False
@@ -342,7 +359,8 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
             pause_reason = '本轮未更新 next_task；本轮文件已归档并恢复上一接受状态。'
             outcome = 'NEXT_TASK_NOT_ADVANCED'
             return 3, outcome
-        if after.get('selected_idea') != before.get('selected_idea'):
+        if (after.get('selected_idea') != before.get('selected_idea') or
+                after.get('supporting_ideas', []) != before.get('supporting_ideas', [])):
             pause_reason = '本轮研究代理改动了已固定的研究想法版本；已恢复上一接受状态。'
             outcome = 'UNCONTROLLED_IDEA_CHANGE'
             return 3, outcome
@@ -350,6 +368,14 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
             pause_reason = '本轮研究代理绕过路线裁决改动 research_route；已恢复上一接受状态。'
             outcome = 'UNCONTROLLED_ROUTE_CHANGE'
             return 3, outcome
+        from research_quality import validate_round
+        validate_round(project, after['last_run'], before_hashes)
+        from theory_gate import validate_code_changes
+        validate_code_changes(project, {rel:meta['sha256'] for rel,meta in transaction.manifest.items()})
+        from engine.deep_reasoning import validate_checkpoint
+        validate_checkpoint(project, after['last_run'])
+        if before.get('initialization_required'):
+            __import__('engine.initialization', fromlist=['validate']).validate(project, after['last_run'])
         if reviewing:
             outcome = apply_review(project, ledger, epoch, policy, after)
             save_ledger(ledger_path, ledger)
@@ -363,6 +389,9 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
             outcome = 'COUNTED_RESEARCH_ROUND'
         transaction.accept()
         accepted = True
+        if before.get('initialization_required'):
+            __import__('engine.initialization', fromlist=['finalize']).finalize(project, after['last_run'])
+        discovery.finalize_wrapper(project, True, after['last_run'])
         finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'])
         return 0, outcome
     except KeyboardInterrupt:
@@ -373,6 +402,7 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
             archive = transaction.rollback(outcome)
             if pause_reason: decision_pause(project, {}, pause_reason)
             finish_status(project, accepted=False, outcome=outcome, archive=archive)
+            discovery.finalize_wrapper(project, False)
 
 
 def main(argv=None) -> int:

@@ -1,0 +1,9 @@
+{
+  "claim_id": "CLAIM-001",
+  "claim_sha256": "填写 claim show 输出的 spec_sha256",
+  "verdict": "PENDING",
+  "technical_reviews": ["literature/technical_reviews/closest-result.json"],
+  "nontriviality_argument": "填写非平凡差异，排除标准拼接、等价重写和工程优化",
+  "novelty_mechanism": "填写真正新增的数学/安全机制",
+  "search_scope": "填写检索日期、范围、关键词、最相近成果及缺失的原文"
+}

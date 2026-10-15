@@ -5,7 +5,12 @@
   ],
   "read_order": [
     "inputs/CONTEXT.md",
-    "inputs/NOTATION.md"
+    "inputs/NOTATION.md",
+    "inputs/CONTRIBUTION_TARGET.md",
+    "research/CONTRIBUTION.md",
+    "research/PROJECT_BRIEF.md",
+    "research/NOTATION.md",
+    "research/INITIALIZATION.json"
   ],
   "constraints": []
 }

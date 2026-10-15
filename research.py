@@ -177,6 +177,9 @@ def command_check(args):
                 raise ValueError("PROJECT.json checks 必须是数组。")
             project_failed = False
             for spec in checks:
+                if isinstance(spec,dict) and spec.get('kind') == 'SYSTEM_TEST':
+                    from theory_gate import require_system_ready
+                    require_system_ready(project)
                 argv = spec.get("argv") if isinstance(spec, dict) else spec
                 if not isinstance(argv, list) or not argv or not all(isinstance(v, str) for v in argv):
                     raise ValueError("每个项目检查必须提供非空 argv 字符串数组。")
@@ -420,6 +423,23 @@ def command_ideas(args):
             reason = "用户新增研究想法"
         else:
             item = get_idea(index, args.id)
+            if args.idea_command in {"attach", "detach"}:
+                state = read_state(project)
+                pins = state.get("supporting_ideas", [])
+                if not isinstance(pins, list): raise ValueError("supporting_ideas 必须是数组。")
+                pins = [pin for pin in pins if pin.get("id") != item["id"]]
+                if args.idea_command == "attach":
+                    idea_body(project, item)  # Validate the pinned source file before writing state.
+                    pins.append({"id": item["id"], "version": item["version"]})
+                state["supporting_ideas"] = pins
+                atomic_json(project / "research/STATE.json", state)
+                index["events"].append({"type": args.idea_command.upper(), "id": item["id"],
+                                        "version": item["version"], "at": now()})
+                atomic_json(project / "ideas/INDEX.json", index)
+                append_decision(project, "补充想法" if args.idea_command == "attach" else "移除补充想法",
+                    f"用户{args.idea_command} {item['id']} 第 {item['version']} 版。当前路线、阶段和主任务保持原值。")
+                print("IDEA_ATTACHED:" if args.idea_command == "attach" else "IDEA_DETACHED:", item["id"])
+                return 0
             if args.idea_command == "select":
                 content = idea_body(project, item)
                 route = args.route or item.get("route") or f"IDEA/{item['id']}/v{item['version']}"
@@ -512,7 +532,12 @@ def command_new(args):
     destination = ROOT / "projects" / args.id
     if destination.exists():
         raise ValueError(f"项目已存在：{args.id}")
-    goal = Path(args.goal_file).expanduser().read_text(encoding="utf-8-sig").strip()
+    if not args.goal_file and not args.idea_file:
+        raise ValueError('请提供 --goal-file 或 --idea-file；也可以同时提供。')
+    source = args.goal_file or args.idea_file
+    goal = Path(source).expanduser().read_text(encoding="utf-8-sig").strip()
+    idea = Path(args.idea_file).expanduser().read_text(encoding='utf-8-sig').strip() if args.idea_file else None
+    if args.idea_file and not idea: raise ValueError('想法文件不能为空。')
     if not goal:
         raise ValueError("目标文件不能为空。")
     template = ROOT / "templates" / "project"
@@ -552,15 +577,48 @@ def command_new(args):
             atomic_json(destination / "RESEARCH_PROFILE.json", profile)
             state = read_state(destination)
             state.update({"phase": "INTAKE", "decision": "PAUSE", "last_run": None,
+                          'initialization_required': True, 'initialization_status': 'NOT_RUN',
                           "priority_problem": f"明确 {title} 的最小研究命题和最相近基线。",
                           "next_task": "阅读 GOAL.md 及上传材料，固定研究对象、威胁模型、不可放宽条件、最相近基线和一个可证伪的核心命题。"})
+            if idea:
+                rel = 'ideas/IDEA-0001/v001.md'; replace_text(destination / rel, idea)
+                pin = {'id': 'IDEA-0001', 'version': 1}
+                item = {'id': pin['id'], 'title': title, 'version': 1, 'route': 'INITIAL/INTAKE',
+                    'created': now(), 'updated': now(), 'revisions': [{'version': 1, 'file': rel,
+                    'reason': '新建时导入原始研究想法', 'at': now(),
+                    'sha256': hashlib.sha256((destination / rel).read_bytes()).hexdigest()}]}
+                atomic_json(destination / 'ideas/INDEX.json', {'schema_version': 1, 'ideas': [item],
+                    'active_idea': pin, 'events': [{'type': 'INITIAL_IDEA', **pin, 'at': now()}]})
+                state['selected_idea'] = pin
             atomic_json(destination / "research" / "STATE.json", state)
         except Exception:
             shutil.rmtree(destination, ignore_errors=True)
             raise
     print("PROJECT_CREATED:", args.id)
-    print("补充 GOAL.md、literature/queries.json 和论文；check 通过后执行 ready，再执行 run。")
+    print('原始目标/想法已保存。运行 research.cmd initialize ' + args.id + '，按 idea 生成初始化研究文档；也可先 prompt --initialize 预览。')
     return 0
+
+
+def command_initialize(args):
+    import runner_core
+    from engine.discovery_scheduler import active
+    project = resolve_project(args.project)
+    if active(project): raise ValueError('请先关闭当前研究尝试，再重新初始化研究文档。')
+    state = runner_core.validate_project(project)
+    if (project / 'research/INITIALIZATION.json').exists() and not args.refresh:
+        raise ValueError('初始化记录已存在；明确使用 --refresh 更新派生文档。原始材料保持原样。')
+    state.update(phase='INTAKE', decision='CONTINUE', initialization_required=True,
+                 initialization_status='NOT_RUN',
+                 next_task='依据已固定的用户想法与原始材料，执行 initialize_from_idea.md，补齐派生文档并明确所有未确认事项。')
+    if args.dry_run:
+        tier, model, effort = runner_core.plan_route(project, state, model=args.model, effort=args.effort)
+        print('INITIALIZATION_PREVIEW:', model, effort)
+        print(runner_core.build_prompt(project, state, 'PREVIEW_ONLY', tier))
+        return 0
+    if (project / '.control/STOP_REQUESTED').exists(): raise ValueError('先 clear-stop，再执行 initialize。')
+    with project_lock(project): atomic_json(project / 'research/STATE.json', state)
+    args.rounds = 1
+    return run_child(runner_command(project, args))
 
 
 def command_ready(args):
@@ -572,14 +630,87 @@ def command_ready(args):
         groups = queries.get("groups", queries.get("queries", [])) if isinstance(queries, dict) else queries
         if not groups:
             raise ValueError("请先填写 literature/queries.json 的检索组。")
+        if args.phase:
+            from theory_gate import SYSTEM_PHASES, require_system_ready
+            if args.phase in SYSTEM_PHASES: require_system_ready(project)
+            state['phase']=args.phase
         if args.task:
             if len(args.task.strip()) < 12:
                 raise ValueError("--task 请提供明确研究任务，至少 12 个字符。")
             state["next_task"] = args.task.strip()
-        state.update({"decision": "CONTINUE", "phase": "LITERATURE" if state.get("phase") == "INTAKE" else state.get("phase")})
+        state.update({"decision": "CONTINUE", "phase": state.get("phase")})
         atomic_json(project / "research" / "STATE.json", state)
         append_decision(project, "用户启用项目", "用户通过 ready 启用现有目标和下一轮任务，尚未执行模型调用。")
     print("PROJECT_READY:", project_id(project))
+    return 0
+
+
+def command_theory(args):
+    from theory_gate import check_readiness, APPROVAL_PATH
+    from research_quality import scientific_files, hash_file
+    project=resolve_project(args.project)
+    if args.theory_command == 'status':
+        try:
+            approval=check_readiness(project)
+            print_json({'theory_ready':True,'claim_id':approval['claim_id'],'reviewer':approval['reviewer']})
+        except (OSError,ValueError,KeyError) as exc:
+            print_json({'theory_ready':False,'reason':str(exc),'next_action':'完成贡献、原文比较和正确性审查后，由用户执行 theory approve。'})
+        return 0
+    with project_lock(project):
+        if args.theory_command == 'revoke':
+            record=load_json(project/APPROVAL_PATH,{})
+            record.update({'schema_version':1,'decision':'REVOKED','revoked_at':now(),'revoke_reason':args.reason})
+            atomic_json(project/APPROVAL_PATH,record)
+            append_decision(project,'撤回系统实现许可',args.reason)
+            return 0
+        paths={'contribution':args.contribution,'correctness':args.correctness,'novelty':args.novelty}
+        if args.security: paths['security']=args.security
+        files=scientific_files(project,list(paths.values()))
+        by_path={rel:path for rel,path in files}
+        if APPROVAL_PATH in by_path: raise ValueError('不能用许可文件证明自身。')
+        state=read_state(project)
+        from engine.claim_graph import require_theory_claim
+        discovery_claim = require_theory_claim(project, args.claim)
+        record={'schema_version':1,'decision':'APPROVED','claim_id':args.claim,
+            'reviewer':args.reviewer,'reason':args.reason,'approved_at':now(),
+            'goal_sha256':hash_file(project/'GOAL.md'),'research_route':state.get('research_route'),
+            'idea_pins':{'selected_idea':state.get('selected_idea'),'supporting_ideas':state.get('supporting_ideas',[])},
+            'inputs':{p.relative_to(project).as_posix():hash_file(p) for p in (project/'inputs').rglob('*') if p.is_file()},
+            'constraint_files':{name:hash_file(project/name) for name in ('AGENTS.md','RESEARCH_PROFILE.json','research/THREAT_MODEL.md','research/SECURITY_MODEL.md','research/SECURITY_DEFINITIONS.md') if (project/name).is_file()},
+            'evidence':{key:{'file':rel,'sha256':hash_file(by_path[rel])} for key,rel in paths.items()},
+            'remaining_critical_obligations':[],
+            'scope':'SYSTEM_IMPLEMENTATION_AND_TEST_FOR_APPROVED_CLAIM_ONLY'}
+        if discovery_claim:
+            record['discovery_claim_sha256'] = discovery_claim['spec_sha256']
+        atomic_json(project/APPROVAL_PATH,record)
+        check_readiness(project)
+        append_decision(project,'用户确认理论审查完成',f"主张 {args.claim}；审查者 {args.reviewer}。{args.reason}。许可绑定证据摘要；当前阶段不自动变化。")
+        print('THEORY_APPROVED:',args.claim,'；需要系统开发时再使用 ready --phase IMPLEMENTATION 或 SYSTEM_TEST。')
+    return 0
+
+
+def command_prompt(args):
+    import runner_core
+    from route_budget import load_ledger, selected_route, needs_review, generate_directive
+    project = resolve_project(args.project)
+    state = runner_core.validate_project(project)
+    policy, _, _ = policy_for(ROOT, project)
+    _, _, epoch = load_ledger(ROOT, project, state)
+    reason = needs_review(epoch, policy)
+    review = args.audit or bool(reason)
+    state = copy.deepcopy(state)
+    if args.initialize:
+        state.update(phase='INTAKE', initialization_required=True)
+    state['next_task'] = generate_directive(selected_route(state), epoch, policy, bool(reason), reason, state['next_task'])
+    tier, _, _ = runner_core.plan_route(project, state, audit=review)
+    content = runner_core.build_prompt(project, state, 'PREVIEW_ONLY', tier, audit=review)
+    if args.output:
+        destination = Path(args.output).expanduser().resolve()
+        if destination.exists(): raise ValueError('提示词输出文件已存在，请使用新文件名。')
+        replace_text(destination, content)
+        print('PROMPT_SAVED:', destination)
+    else:
+        print(content)
     return 0
 
 
@@ -646,9 +777,9 @@ def parser():
     add_project(c); common_run_options(c, run=False); c.add_argument("--prepare", action="store_true")
     c = command("ideas", command_ideas, "保存、更新、查看和选择研究想法")
     idea_sub = c.add_subparsers(dest="idea_command", required=True)
-    for name in ("list", "show", "add", "update", "select"):
+    for name in ("list", "show", "add", "update", "select", "attach", "detach"):
         i = idea_sub.add_parser(name); add_project(i)
-        if name in {"show", "update", "select"}:
+        if name in {"show", "update", "select", "attach", "detach"}:
             i.add_argument("--id", required=True)
         if name in {"add", "update"}:
             i.add_argument("--title", required=name == "add")
@@ -663,10 +794,25 @@ def parser():
     i = paper_sub.add_parser("ingest"); add_project(i)
     i.add_argument("--file", required=True); i.add_argument("--url"); i.add_argument("--title")
     c = command("new", command_new, "从固定模板创建新研究项目")
-    c.add_argument("id"); c.add_argument("--goal-file", required=True); c.add_argument("--title")
+    c.add_argument("id"); c.add_argument("--goal-file"); c.add_argument('--idea-file'); c.add_argument("--title")
     c.add_argument("--profile", choices=("generic", "mpc_secagg", "ntru_lattice"), default="generic")
+    c = command('initialize', command_initialize, '按 idea 补齐初始化研究文档；--dry-run 只预览')
+    add_project(c); common_run_options(c, run=False); c.add_argument('--dry-run', action='store_true'); c.add_argument('--refresh', action='store_true')
+    c = command("theory", command_theory, "理论审查状态和用户批准的系统实现门禁")
+    gate_sub=c.add_subparsers(dest='theory_command',required=True)
+    for action in ('status','approve','revoke'):
+        gate=gate_sub.add_parser(action);add_project(gate)
+        if action == 'approve':
+            for field in ('claim','contribution','correctness','novelty','reviewer','reason'):
+                gate.add_argument('--'+field,required=True)
+            gate.add_argument('--security')
+        elif action == 'revoke':gate.add_argument('--reason',required=True)
+    c = command("prompt", command_prompt, "预览最终提示词，不调用模型、不修改研究状态")
+    add_project(c); c.add_argument("--audit", action="store_true"); c.add_argument("--output"); c.add_argument('--initialize', action='store_true')
     c = command("ready", command_ready, "填写材料后显式启用项目")
-    add_project(c); c.add_argument("--task", help="启用时明确下一轮任务")
+    add_project(c); c.add_argument("--task", help="启用时明确下一轮任务"); c.add_argument("--phase", choices=("LITERATURE","NOVELTY","FALSIFICATION","CONSTRUCTION","CORRECTNESS","PROOF","SECURITY","COST","IMPLEMENTATION","SYSTEM_TEST","EXPERIMENT","WRITING","REVIEW"))
+    from engine.cli import add_commands
+    add_commands(sub, add_project, common_run_options)
     return p
 
 

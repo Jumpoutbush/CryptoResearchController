@@ -34,3 +34,11 @@ Thumbs.db
 state/snapshots/
 
 /projects/
+
+# Personal projects and local research state
+/projects/
+/config/projects/
+/state/
+/logs/
+/locks/
+/backups/

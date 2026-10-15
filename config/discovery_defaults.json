@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "strategy": "single_deep_reasoner",
+  "initial_round_budget": 6,
+  "stagnation_rounds": 3,
+  "extension_round_budget": 4,
+  "max_extensions": 1,
+  "max_independent_attempts": 3,
+  "automatic_falsification": true,
+  "falsification_every": 2,
+  "require_theorem_level_novelty": true,
+  "require_independent_verification": true,
+  "formal_verification": "when_applicable",
+  "preserve_proof_obligations": true,
+  "invalidate_dependent_claims": true,
+  "allow_unapproved_goal_changes": false,
+  "counterexample_max_cases": 10000,
+  "counterexample_max_seconds": 3,
+  "verifier_timeout_seconds": 120
+}

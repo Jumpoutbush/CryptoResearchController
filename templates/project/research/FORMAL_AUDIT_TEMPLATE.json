@@ -1,0 +1,9 @@
+{
+  "claim_id": "CLAIM-001",
+  "receipt_sha256": "填写 claim show 输出中的 formal_receipt_sha256",
+  "verdict": "PENDING",
+  "statement_mapping": "逐项核对形式声明的量词、定义、假设与原始问题",
+  "axioms_argument": "核对完整输出中的公理、导入、自定义假设与预期信任范围",
+  "dependency_scope": "说明覆盖主结论还是辅助结论及未覆盖部分",
+  "allowed_axioms": []
+}

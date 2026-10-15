@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "scope": "Exact integer verification fixtures, not research discovery benchmarks",
+  "cases": [
+    {"id": "square-nonnegative", "category": "known_correct", "expected": "SEARCHED_NOT_FOUND",
+     "statement": {"domain": "INTEGER", "variables": ["x"], "preconditions": [], "conclusion": "x*x >= 0"}},
+    {"id": "sign-error", "category": "known_incorrect", "expected": "EXACT_COUNTEREXAMPLE",
+     "statement": {"domain": "INTEGER", "variables": ["x"], "preconditions": [], "conclusion": "(x+1)*(x-1) == x*x+1"}},
+    {"id": "modular-is-not-integer-equality", "category": "known_incorrect", "expected": "EXACT_COUNTEREXAMPLE",
+     "statement": {"domain": "INTEGER", "variables": ["a", "q"], "preconditions": ["q > 1", "a % q == 0"], "conclusion": "a == q"}},
+    {"id": "two-public-linear-queries", "category": "known_incorrect", "expected": "EXACT_COUNTEREXAMPLE",
+     "statement": {"domain": "INTEGER", "variables": ["x1", "x2", "y1", "y2"],
+       "preconditions": ["y1 == x1+x2", "y2 == x1+2*x2"], "conclusion": "2*y1-y2 != x1"}}
+  ]
+}

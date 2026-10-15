@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "CLAIM-001",
+  "problem_id": "P-001",
+  "problem_version": 1,
+  "statement": "填写准确候选定理",
+  "assumptions": ["填写全部前提"],
+  "dependencies": [],
+  "obligation_ids": ["O-001"],
+  "proposer": "codex",
+  "contribution_type": "SECURITY_THEOREM",
+  "nontriviality_argument": "填写非平凡理论机制及相近结果差异",
+  "verification_mode": "INDEPENDENT_MANUAL",
+  "formal_applicability_reason": "说明为何采用独立人工证明审查；适合 Lean 的命题应改为 FORMAL_REQUIRED 并添加 formal_target",
+  "evidence_paths": ["proofs/claim-001.md"]
+}

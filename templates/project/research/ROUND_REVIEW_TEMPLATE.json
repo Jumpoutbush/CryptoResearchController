@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "run_id": "CONTROLLER_RUN_ID",
+  "work_kind": "CORE_RESEARCH",
+  "core_problem": "待填写具体问题",
+  "theoretical_obligation": "待填写本轮唯一优先义务",
+  "nontriviality_argument": "待核查与最近成果的技术差异",
+  "contribution_type": "NONE",
+  "result_status": "OPEN",
+  "evidence_paths": []
+}

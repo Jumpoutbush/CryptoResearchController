@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "require_round_review": true,
+  "max_consecutive_support_rounds": 2,
+  "require_decisive_evidence_for_pivot": true,
+  "require_theory_candidate_for_pivot": true,
+  "theory_first": true,
+  "max_math_code_files": 2,
+  "max_math_code_lines": 160,
+  "math_check_timeout_seconds": 10
+}

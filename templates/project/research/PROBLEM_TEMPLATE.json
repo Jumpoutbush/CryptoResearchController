@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "P-001",
+  "title": "填写精确研究问题的标题",
+  "statement": "填写完整数学/安全命题；包含量词、前提与结论",
+  "quantifiers": "填写所有量词及顺序",
+  "domain": "填写数学对象、参数范围或安全模型",
+  "assumptions": ["填写明确前提"],
+  "input_contract": "填写输入、分布及合法性条件",
+  "output_contract": "填写准确输出、安全保证、短性或成本要求",
+  "immutable_constraints": ["填写不得放宽的核心要求"],
+  "goal_connection": "说明这个命题解决 GOAL 中的哪个核心障碍",
+  "contribution_type": "SECURITY_THEOREM",
+  "nontriviality_argument": "说明标准构造或已有定理无法直接覆盖的技术缺口",
+  "baseline_exclusions": ["填写需要排除的已知等价变换或直接组合"],
+  "source_paths": [],
+  "priority": 50,
+  "obligations": [
+    {"id": "O-001", "statement": "填写一个必要证明义务", "acceptance_criterion": "填写可复核的闭合标准"}
+  ]
+}

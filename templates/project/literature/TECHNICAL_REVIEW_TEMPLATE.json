@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "claim_id": "CLAIM_ID",
+  "paper": {
+    "title": "原文标题",
+    "version": "原文版本",
+    "source_file": "literature/pdfs/PAPER.pdf",
+    "sha256": "待填写"
+  },
+  "fulltext_status": "PENDING",
+  "author_claim": "作者自述",
+  "technical_statement": "正文实际成立的定理或算法保证",
+  "source_location": "页码、定理、算法、证明位置",
+  "comparison": [
+    {
+      "dimension": "functionality",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    },
+    {
+      "dimension": "adversary",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    },
+    {
+      "dimension": "assumptions",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    },
+    {
+      "dimension": "output_interface",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    },
+    {
+      "dimension": "parameters",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    },
+    {
+      "dimension": "cost",
+      "idea": "本项目精确条件",
+      "paper": "原文精确条件",
+      "relation": "UNRESOLVED",
+      "source_location": "待核查",
+      "argument": "待给出推导"
+    }
+  ],
+  "construction_mapping": "算法模块和变量对应关系",
+  "reduction_argument": "待给出明确变换及新增代价",
+  "limitations": "未核查或不适用的范围",
+  "coverage_verdict": "UNVERIFIED",
+  "derivation_paths": []
+}

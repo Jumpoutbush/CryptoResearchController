@@ -51,6 +51,9 @@ def deep_merge(base, override):
 
 
 def validate_settings(settings):
+    from engine.discovery_scheduler import DEFAULTS, validate_policy as validate_discovery
+    settings.setdefault('discovery_policy', copy.deepcopy(DEFAULTS))
+    validate_discovery(settings['discovery_policy'])
     model = settings['model_policy']
     if not isinstance(model, dict) or set(model) - {'routine', 'critical', 'critical_phases'}:
         raise ValueError('Invalid model_policy keys')
@@ -83,6 +86,17 @@ def validate_settings(settings):
     for name,low,high in [('max_pdf_downloads_per_round',0,5),('max_pdf_mb',1,80)]:
         if type(literature.get(name)) is not int or not low <= literature[name] <= high:
             raise ValueError(f'Invalid {name}')
+    policy = settings.get('research_policy', {})
+    if not isinstance(policy, dict) or set(policy) != {'schema_version','require_round_review','max_consecutive_support_rounds','require_decisive_evidence_for_pivot','require_theory_candidate_for_pivot','theory_first','max_math_code_files','max_math_code_lines','math_check_timeout_seconds'}:
+        raise ValueError('Invalid research_policy fields')
+    if policy['schema_version'] != 1: raise ValueError('Unsupported research_policy version')
+    for key in ('require_round_review','require_decisive_evidence_for_pivot','require_theory_candidate_for_pivot','theory_first'):
+        if type(policy[key]) is not bool: raise ValueError(key+' must be boolean')
+    if type(policy['max_consecutive_support_rounds']) is not int or not 1 <= policy['max_consecutive_support_rounds'] <= 20:
+        raise ValueError('max_consecutive_support_rounds must be in 1..20')
+    for field,maximum in [('max_math_code_files',10),('max_math_code_lines',1000),('math_check_timeout_seconds',60)]:
+        if type(policy[field]) is not int or not 1 <= policy[field] <= maximum:
+            raise ValueError('Invalid '+field)
     return settings
 
 
@@ -90,11 +104,22 @@ def settings_for(project: Path | None = None):
     default = load_json(ROOT / 'config/defaults.json')
     if not isinstance(default, dict) or default.get('schema_version') != 1:
         raise ValueError('Missing/invalid config/defaults.json')
-    allowed = {'schema_version','model_policy','execution','literature','route_policy'}
+    allowed = {'schema_version','model_policy','execution','literature','route_policy','research_policy','discovery_policy'}
     if set(default) - allowed:
         raise ValueError('Unknown global settings')
     settings = copy.deepcopy(default)
     settings['route_policy'] = load_json(ROOT / 'config/route_policy.json', {})
+    research_defaults = {
+        'schema_version':1, 'require_round_review':True, 'max_consecutive_support_rounds':2,
+        'require_decisive_evidence_for_pivot':True, 'require_theory_candidate_for_pivot':True,
+        'theory_first':True, 'max_math_code_files':2, 'max_math_code_lines':160, 'math_check_timeout_seconds':10}
+    user_research = load_json(ROOT / 'config/research_policy.json', {})
+    if not isinstance(user_research,dict): raise ValueError('research_policy must be an object')
+    settings['research_policy'] = deep_merge(research_defaults,user_research)
+    from engine.discovery_scheduler import DEFAULTS as discovery_defaults
+    discovery = load_json(ROOT / 'config/discovery_defaults.json', {})
+    if not isinstance(discovery, dict): raise ValueError('discovery_defaults must be an object')
+    settings['discovery_policy'] = deep_merge(discovery_defaults, discovery)
     if project is not None:
         override = load_json(ROOT / 'config/projects' / (project_id(project) + '.json'), {})
         if not isinstance(override, dict) or set(override) - allowed:

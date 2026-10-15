@@ -73,6 +73,10 @@ class RunnerTests(unittest.TestCase):
         put(self.project / 'research/ROUTE_SIGNAL.json', {'run_id': rid, 'progress_type': 'PROOF_STEP',
             'reason': 'A precise new proof obligation has been isolated and independently recorded.',
             'evidence_paths': ['proofs/new.md'], 'route_blocked': False})
+        put(self.project / 'research/ROUND_REVIEW.json', {'schema_version':1,'run_id':rid,'work_kind':'PROOF',
+            'core_problem':'Decisive fixed-target mathematical obstruction','theoretical_obligation':'Prove the remaining quantified condition',
+            'nontriviality_argument':'Existing lemma does not cover the original integer constraints',
+            'contribution_type':'NONE','result_status':'OPEN','evidence_paths':['proofs/new.md']})
 
     def advance(self, child):
         policy, _, _ = route_budget.policy_for(self.root, self.project)
@@ -166,6 +170,16 @@ class RunnerTests(unittest.TestCase):
         with mock.patch.object(runner, 'run_child', side_effect=child), mock.patch.object(runner_core, 'git_checkpoint', side_effect=checkpoint):
             self.assertEqual(runner.advance_one(self.project, policy, path, ledger, epoch, ['python', 'core']), (0, 'EXTENDED'))
 
+    def test_agent_cannot_create_its_own_theory_approval(self):
+        def native(project,prompt,rid,*args,**kwargs):
+            self.complete(rid)
+            put(project/'research/THEORY_READINESS.json',{'decision':'APPROVED'})
+            return 0,'test-log'
+        with mock.patch.object(runner_core.shutil,'which',return_value='fake-codex'), mock.patch.object(runner_core,'codex_run',side_effect=native):
+            self.assertEqual(runner_core.run_round(self.project,round_num=1,seconds=30,skip_fetch=True),5)
+        self.assertFalse((self.project/'research/THEORY_READINESS.json').exists())
+        self.assertEqual(self.current()['last_run'],None)
+
     def test_core_rolls_back_malformed_gates_and_protected_inputs(self):
         original = self.current()
         def codex(project, prompt, rid, *args, **kwargs):
@@ -244,9 +258,16 @@ class RunnerTests(unittest.TestCase):
             'novelty_question_identified': True, 'priority': 1,
             'priority_problem': 'A different precise subclaim preserves the fixed research objective.',
             'next_task': 'Run the smallest decisive feasibility test for the alternative construction.',
-            'evidence_paths': ['proofs/original.md']}
+            'evidence_paths': ['proofs/original.md'], 'theoretical_contribution': {
+                'type':'PROTOCOL_CONSTRUCTION','statement':'An explicit alternative property',
+                'novelty_mechanism':'A new relation invariant','closest_prior_work':'Fixed original comparison',
+                'nontriviality_argument':'The existing result lacks the needed integer interface',
+                'proof_obligation':'Prove the full quantified invariant','evidence_paths':['proofs/original.md']}}
         put(self.project / 'research/ROUTE_VERDICT.json', {'run_id': 'pivot-1', 'outcome': 'PIVOT_PROVISIONAL',
             'reason': 'The original route has a concrete counterexample and the alternative preserves the goal.',
+            'failure_class':'COUNTEREXAMPLE','failed_claim':'C-001','failure_scope':'CORE_ROUTE',
+            'scope_argument':'Only this exact route is rejected','dependency_argument':'This constraint is necessary for the core construction',
+            'satisfied_preconditions':'The fixed bounded input conditions hold','violated_conclusion':'The claimed exact equality fails',
             'evidence_paths': ['proofs/original.md'], 'requires_goal_change': False, 'candidates': [candidate]})
         after = copy.deepcopy(state); after['last_run'] = 'pivot-1'
         result = runner.apply_review(self.project, ledger, epoch, policy, after)
@@ -280,7 +301,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_ignored_extracted_text_does_not_block_checkpoint(self):
         if shutil.which('git') is None: self.skipTest('git unavailable')
-        shutil.copy2(SOURCE / '.gitignore', self.root / '.gitignore')
+        (self.root / '.gitignore').write_text('**/literature/text/\n',encoding='utf8')
         subprocess.run(['git', 'init', '-b', 'main', str(self.root)], check=True, capture_output=True)
         subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
         subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Tester', '-c', 'user.email=tester@localhost', 'commit', '-m', 'initial'], check=True, capture_output=True)

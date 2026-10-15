@@ -252,7 +252,7 @@ def evidence_path(project: Path, raw: str) -> Path | None:
     if not parts or parts[0] not in {"proofs", "experiments", "literature", "research"}:
         return None
     excluded = {"STATE.json", "ROUTE_SIGNAL.json", "ROUTE_VERDICT.json",
-                "ROUTE_DIRECTIVE.md", "RUN_RESULT.json", "ROUTE_HISTORY.jsonl"}
+                "ROUTE_DIRECTIVE.md", "RUN_RESULT.json", "ROUTE_HISTORY.jsonl", "ROUND_REVIEW.json"}
     if parts[-1] in excluded or "_upgrade_proposals" in parts or "pdfs" in parts:
         return None
     if resolved.stat().st_size > 4_000_000:
@@ -262,7 +262,7 @@ def evidence_path(project: Path, raw: str) -> Path | None:
 
 def evidence_snapshot(project: Path) -> dict[str, str]:
     selected_dirs = ["proofs", "experiments", "literature", "research"]
-    deny = {"STATE.json", "ROUTE_SIGNAL.json", "ROUTE_VERDICT.json", "ROUTE_DIRECTIVE.md", "RUN_RESULT.json"}
+    deny = {"STATE.json", "ROUTE_SIGNAL.json", "ROUTE_VERDICT.json", "ROUTE_DIRECTIVE.md", "RUN_RESULT.json", "ROUND_REVIEW.json"}
     out = {}
     for folder in selected_dirs:
         parent = project / folder
@@ -333,6 +333,8 @@ def load_verdict(project: Path, run_id: str) -> dict:
         verdict["unapproved_goal_change"] = True
     else:
         verdict["unapproved_goal_change"] = False
+    from research_quality import validate_route_decision
+    validate_route_decision(project, verdict)
     return verdict
 
 
@@ -361,6 +363,11 @@ def choose_candidate(project: Path, verdict: dict):
         rank = c.get("priority", 999)
         if type(rank) is not int or rank < 1 or rank > 100:
             rank = 999
+        from research_quality import validate_candidate
+        try:
+            validate_candidate(project, c)
+        except (ValueError, OSError, KeyError):
+            continue
         qualified.append((rank, pos, c))
     if not qualified:
         return None
