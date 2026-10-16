@@ -70,6 +70,14 @@ def dispatch_knowledge(args):
     import research
     from . import knowledge_graph
     action = args.action
+    if action in {'build', 'explain'}:
+        from knowledge import build as projection
+        if args.project == 'all': raise ValueError('Projection operations require one explicit project')
+        project = research.resolve_project(args.project)
+        result = (projection.build(configuration.ROOT,project,dry_run=args.dry_run) if action=='build'
+                  else projection.explain_claim(configuration.ROOT,project,args.claim,args.revision))
+        research.print_json({'project':configuration.project_id(project),'knowledge':result})
+        return 0
     readonly = action in {'status', 'search', 'show', 'trace', 'impact'}
     if args.project == 'all':
         if action not in {'status', 'search'}:
@@ -82,7 +90,10 @@ def dispatch_knowledge(args):
             if not readonly:
                 stack.enter_context(research.project_lock(project))
                 stack.enter_context(file_lock(configuration.ROOT / 'locks' / (configuration.project_id(project) + '.lock')))
-            if action == 'status': result = knowledge_graph.status(project)
+            if action == 'status':
+                result = knowledge_graph.status(project)
+                from knowledge import build as projection
+                result['projection'] = projection.status(configuration.ROOT,project)
             elif action == 'search': result = knowledge_graph.search(project, args.query, kind=args.kind, limit=args.limit)
             elif action == 'show': result = knowledge_graph.get(project, args.id, revision=args.revision)
             elif action == 'trace': result = knowledge_graph.trace(project, args.id)
@@ -98,6 +109,8 @@ def add_commands(subparsers, add_project, common_run_options):
     top = subparsers.add_parser('knowledge', help='长期科研知识：来源追溯、失效传播与现有主张图')
     subs = top.add_subparsers(dest='action', required=True)
     descriptions = {'status': '只读查看来源、知识与现有主张的当前状态',
+        'build':'构建可删重建的只读来源投影；仅写state/knowledge缓存',
+        'explain':'只读解释精确主张版本、义务、问题、目标和来源',
         'search': '只读检索当前及历史知识；历史命中不表示当前通过',
         'show': '只读查看节点；--revision 选择知识历史版本',
         'trace': '只读追溯当前状态和精确绑定的历史来源快照',
@@ -105,9 +118,12 @@ def add_commands(subparsers, add_project, common_run_options):
         'import': '持锁登记结构化知识及精确来源',
         'refresh': '持锁刷新本地来源索引，不调用模型',
         'invalidate': '持锁登记明确失效原因，保留历史'}
-    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate'):
+    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate', 'build', 'explain'):
         cmd = subs.add_parser(action, help=descriptions[action], description=descriptions[action])
         add_project(cmd); cmd.set_defaults(function=dispatch_knowledge)
+        if action == 'build': cmd.add_argument('--dry-run', action='store_true')
+        if action == 'explain':
+            cmd.add_argument('--claim',required=True); cmd.add_argument('--revision',type=int)
         if action in {'show', 'trace', 'impact', 'invalidate'}: cmd.add_argument('--id', required=True)
         if action == 'show': cmd.add_argument('--revision', type=int, help='知识节点历史版本；主张沿用现有 claim show')
         if action == 'search':

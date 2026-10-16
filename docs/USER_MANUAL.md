@@ -364,3 +364,10 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 单项目显式启用或批量 `--confirm` 后才接入自动调度。当前真实 Codex 后端仍阻断，
 Fake 只允许注册的临时合成项目。`supervise disable <project>` 保留成本、指南和历史，
 关闭自动消费及提示注入；`history` 展示原记录及新事件/指南状态。
+# R06 只读证据图缓存
+
+`research.cmd knowledge build <project> --dry-run` 预览统一投影；去掉dry-run只写
+state/knowledge缓存，不修改主张图。`knowledge explain <project> --claim <id>`
+追溯当前主张、精确依赖版本、义务、问题、目标与来源。`knowledge status`附加缓存
+当前/过期/损坏摘要；读取不会修复或升级科学状态。操作与来源说明见
+[R06证据投影](KNOWLEDGE_R06_PROJECTION.md)。默认不为个人项目创建缓存。

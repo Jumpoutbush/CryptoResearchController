@@ -61,3 +61,10 @@ application occur outside the science transaction and route lock. Explicit opt-i
 activation has an enrollment watermark and a disabled crash fence. Cost balances
 remain exclusively in the original supervision ledger; unknown external outcomes
 are never retried automatically. See [R05 operations](SUPERVISION_R05_INTEGRATION.md).
+# R06 derived evidence graph
+
+The knowledge package projects canonical claim statuses and exact historical pins,
+the existing read-only memory view, problem revisions and route/attempt receipts.
+Only explicit build writes a reconstructible state/knowledge index; status/explain
+derive from live sources and never trust cached proof states. Original scientific
+authorities and budgets remain unchanged. See [R06 projection](KNOWLEDGE_R06_PROJECTION.md).
