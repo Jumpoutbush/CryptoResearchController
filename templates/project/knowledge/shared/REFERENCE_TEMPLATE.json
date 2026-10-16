@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "PUBLIC-PAPER-1",
+  "revision": 1,
+  "origin_project": "FILL_SOURCE_PROJECT_ID",
+  "kind": "PAPER_IDENTITY",
+  "summary": "Replace with operator-approved public paper identity only.",
+  "permission": {
+    "license": "OPERATOR-APPROVED-SHARING",
+    "approved_by": "FILL_OPERATOR",
+    "reason": "FILL_EXPLICIT_PUBLIC_SHARING_REASON"
+  },
+  "origin": {
+    "node_id": "FILL_SOURCE_PROJECT_ID:SOURCE_VERSION:PUBLIC-PAPER-1:1",
+    "goal_sha256": null,
+    "problem_id": null,
+    "problem_version": null,
+    "problem_sha256": null,
+    "claim_id": null,
+    "claim_revision": null,
+    "claim_spec_sha256": null,
+    "obligation_ids": [],
+    "authority_sha256_at_export": null
+  },
+  "model": {
+    "model": "UNSPECIFIED_REQUIRES_REVIEW",
+    "domain": "UNSPECIFIED_REQUIRES_REVIEW",
+    "quantifiers": "UNSPECIFIED_REQUIRES_REVIEW",
+    "assumptions": [],
+    "parameters": "UNSPECIFIED_REQUIRES_REVIEW",
+    "adversary": "UNSPECIFIED_REQUIRES_REVIEW",
+    "leakage": "UNSPECIFIED_REQUIRES_REVIEW"
+  },
+  "source_bindings": [
+    {
+      "path": "knowledge/shared/sources/public-paper.txt",
+      "sha256": "FILL_ACTUAL_PUBLIC_TEXT_SHA256"
+    }
+  ],
+  "verification_status_at_export": "UNVERIFIED_PAPER_IDENTITY"
+}

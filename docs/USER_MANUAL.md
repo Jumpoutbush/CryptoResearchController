@@ -371,3 +371,16 @@ state/knowledge缓存，不修改主张图。`knowledge explain <project> --clai
 追溯当前主张、精确依赖版本、义务、问题、目标与来源。`knowledge status`附加缓存
 当前/过期/损坏摘要；读取不会修复或升级科学状态。操作与来源说明见
 [R06证据投影](KNOWLEDGE_R06_PROJECTION.md)。默认不为个人项目创建缓存。
+# v3.4 R10：显式跨项目参考
+
+`knowledge shared <目标项目> --query <关键词> --dry-run` 只读检索双向白名单。
+默认全局关闭；源项目导出许可、目标项目导入摘要 SHA 和目标模型 SHA 必须同时匹配。
+`knowledge share-preview <源项目> ...` 只生成待操作员审批的草稿，不写文件或授予许可。
+完整命令、MODEL.json 格式、策略样例、来源过期与撤权步骤见
+[KNOWLEDGE_R10_SHARING.md](KNOWLEDGE_R10_SHARING.md)。
+
+共享对象仅为明确批准的公开摘要和精选文本来源，私有 PDF、源码、日志不跨项目读取。
+结果固定 `REFERENCE_ONLY`，逐项比较参数、量词、假设、域、敌手和泄漏；同名或
+文本一致不等于安全等价，不自动注入科研提示或改变主张/义务/预算。
+私有原文当前状态由源项目维护并重新发布；接收方只校验显式公开来源，不能推断
+未发布的私有 PDF 是否变化。当前研发未启用任何个人项目的共享。

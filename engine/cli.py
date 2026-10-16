@@ -70,6 +70,17 @@ def dispatch_knowledge(args):
     import research
     from . import knowledge_graph
     action = args.action
+    if action in {'shared','share-preview'}:
+        if args.project=='all': raise ValueError('Sharing requires one explicit destination/source project')
+        project=research.resolve_project(args.project)
+        from knowledge import federation
+        if action=='shared': result=federation.search(configuration.ROOT,project,query=args.query,model_path=args.model)
+        else:
+            result=federation.preview(configuration.ROOT,project,claim_id=args.claim,reference_id=args.reference_id,
+                revision=args.revision,model_path=args.model,summary_path=args.summary,public_sources=args.public_source,
+                license_id=args.license,approved_by=args.approved_by,reason=args.reason)
+        research.print_json({'project':configuration.project_id(project),'knowledge':result})
+        return 0
     if action in {'build', 'explain', 'diff', 'context'}:
         from knowledge import build as projection
         if args.project == 'all': raise ValueError('Projection operations require one explicit project')
@@ -121,6 +132,8 @@ def add_commands(subparsers, add_project, common_run_options):
         'explain':'只读解释精确主张版本、义务、问题、目标和来源',
         'diff':'只读比较两个已保存的图谱版本与失效原因',
         'context':'只读预览按义务分级的有来源上下文，不调用模型',
+        'shared':'双向白名单中的公开参考；只读、不传递科学认可',
+        'share-preview':'源项目只读生成待操作员审批的公开摘要草稿',
         'search': '只读检索当前及历史知识；历史命中不表示当前通过',
         'show': '只读查看节点；--revision 选择知识历史版本',
         'trace': '只读追溯当前状态和精确绑定的历史来源快照',
@@ -128,9 +141,17 @@ def add_commands(subparsers, add_project, common_run_options):
         'import': '持锁登记结构化知识及精确来源',
         'refresh': '持锁刷新本地来源索引，不调用模型',
         'invalidate': '持锁登记明确失效原因，保留历史'}
-    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate', 'build', 'explain', 'diff', 'context'):
+    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate', 'build', 'explain', 'diff', 'context','shared','share-preview'):
         cmd = subs.add_parser(action, help=descriptions[action], description=descriptions[action])
         add_project(cmd); cmd.set_defaults(function=dispatch_knowledge)
+        if action in {'shared','share-preview'}:
+            cmd.add_argument('--model',default='knowledge/shared/MODEL.json'); cmd.add_argument('--dry-run',action='store_true')
+        if action=='shared': cmd.add_argument('--query',default='')
+        if action=='share-preview':
+            cmd.add_argument('--claim',required=True); cmd.add_argument('--reference-id',required=True)
+            cmd.add_argument('--revision',type=int,default=1); cmd.add_argument('--summary',required=True)
+            cmd.add_argument('--public-source',action='append',required=True)
+            cmd.add_argument('--license',required=True); cmd.add_argument('--approved-by',required=True); cmd.add_argument('--reason',required=True)
         if action=='context':
             cmd.add_argument('--task',default=''); cmd.add_argument('--claim'); cmd.add_argument('--problem')
             cmd.add_argument('--problem-version',type=int); cmd.add_argument('--obligation'); cmd.add_argument('--goal-anchor')
