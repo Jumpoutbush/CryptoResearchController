@@ -8,7 +8,7 @@
 | R02 | 触发/账本 | DONE | 原实现7257e07；兼容补充ef4ce45cbab272dcb4a4e9724850d691919dd8aa | R02专项50/50；原生全量394：393通过/1平台跳过；check all/doctor退出0 | 无本轮未闭合缺陷；外部账单不保证恰好一次，真实指南应用另按R04验收 |
 | R03 | 只读执行 | DONE | 1bfad1bc14608777f8922ae0f9c6ffb801538827 | 专项29/29；真实入口6步离线验收；全量423：422通过/1原平台跳过；check all与doctor退出0 | 按附录仅完成Fake离线验收；真实OS隔离未认证，Codex后端阻断，不可真实上线 |
 | R04 | 指南应用 | DONE | 03cb2c2812ca0263fccff42596db893a01b921ab | 专项28/28及门禁补充1项通过；真实入口10步；全量451：450通过/1原平台跳过；旧项目prompt逐字一致 | 真实Codex后端仍阻断；Fake只限临时样例；watch自动消费/应用另按R05验收 |
-| R05 | 监督集成 | TODO | — | — | — |
+| R05 | 监督集成 | DONE | 1695bddbf4e9cfe633fe96bf1bb78bec3fe967ab | 专项20/20；原生run/watch/双进程及杀进程恢复通过；全量471：470通过/1原平台跳过；check all/doctor退出0 | 仅离线验收；真实Codex仍阻断，Fake只限注册临时样例；R06另行开发 |
 | R06 | 图谱投影 | TODO | — | — | — |
 | R07 | 原文溯源 | TODO | — | — | — |
 | R08 | 失效事件 | TODO | — | — | — |
@@ -173,3 +173,40 @@ OpenSource附录已实际纳入设计参考：ARA固定上游
 科研代理对supervision/的新增、修改、删除由原ProjectTransaction识别并恢复；普通read_order
 不能重复加载或绕过指南校验。没有真实付费科研/监督调用，没有推送。
 最终回执和正常/故障证据位于本次会话outputs/R04/。本轮结束，R05保持TODO，未自行进入。
+
+## R05 运行链接入与恢复验收（2026-10-16）
+
+核对R04 03cb2c2/a5b274f回执及三个实际项目：未启用，无待办/未知结果。
+按00_INDEX读取R05、迁移/恢复公共文档和对应OpenSource附录后增量接入。
+实现提交 `1695bddbf4e9cfe633fe96bf1bb78bec3fe967ab`。
+
+- `python -B -m unittest discover -s tests -p test_supervision_e2e.py -v`：
+  最终20项全部通过，151.949秒，退出0。
+- `python -B scripts/verify_r05_offline.py --output <外部证据目录>`：真实Windows
+  research.cmd watch前三轮、run第四轮（项目目录调用）、停用后第五轮通过；
+  prompt指南计数[0,0,0,1,0]；dry-run不写，恢复不重跑研究；双进程同事件竞争
+  只有一份新增预留，一方正常完成、一方因锁争用退出2，provider_requests=0。
+- `python -B scripts/verify_r04_offline.py --output <外部故障目录>`：10步原生
+  replace后杀进程/恢复演练退出0，原状态、路线和成本字节不变。
+- `python -B -m unittest discover -s tests -v`：最终471项，593.053秒，退出0；
+  470通过、1个原有POSIX平台用例跳过。T01—T06由专项、原生入口与既有安全回归覆盖。
+- `python -B research.py check all`三个项目通过；原生doctor --offline及
+  supervise enable --all --dry-run退出0；diff --check通过。
+- 最终843个个人项目、私有配置、状态和日志文件（含既有缓存）路径及SHA完全一致；
+  三个实际项目prompt与R04逐字一致。R01契约/快照/默认配置/专项、R03执行器、
+  原队列和成本传输7份源码保持原字节，没有重置预算、改写证明或科研历史。
+
+复用原R02预留/完成回执和R04指南事务；运行循环锁外消费，route/core/queue锁序保留。
+启用有历史水位、归属标记和禁用哨兵；丢失配置停止，丢失成本不重新零登记；
+紧急停用保留坏队列/账本并恢复基准提示。未知结果、旧预留不自动重派。
+固定活动尝试延后指南；正式复评优先，第六轮周期/复评合并一份快照。
+仅允许提示阶段STATE.next_task等于原generate_directive对冻结任务的确定性包装，
+应用阶段仍严格比对所有来源；原memory维护先于启用后的快照冻结，避免即时失效。
+
+OpenSource参考The Agentic Researcher固定SHA
+`82d1e3fec5f78863c70c015d2090b9823966e97b`（MIT），只读核验validate_workspace、
+setup_instruction_file及恢复计划，未安装或运行；来源哈希及测试适配见
+../SUPERVISION_R05_INTEGRATION.md和outputs/R05/opensource-reference.json。
+
+R05离线进入条件已满足；真实Codex继续阻断，Fake仅注册临时样例，没有实际付费轮次、
+启用个人项目或推送。依本次用户授权，提交本回执后才读取并继续R06，R07以后保持TODO。
