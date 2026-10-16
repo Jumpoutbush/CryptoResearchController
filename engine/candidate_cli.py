@@ -12,11 +12,26 @@ def dispatch(args):
     from candidate_search import catalog
     project = research.resolve_project(args.project)
     with contextlib.ExitStack() as stack:
-        if args.action not in {'list', 'show', 'anchor', 'plan', 'schedule-status'}:
+        if args.action not in {'list', 'show', 'anchor', 'plan', 'schedule-status',
+                                'verify-prepare', 'verification-show', 'verification-recheck'}:
             stack.enter_context(research.project_lock(project))
             stack.enter_context(file_lock(configuration.ROOT / 'locks' /
                                           (configuration.project_id(project) + '.lock')))
-        if args.action in {'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run'}:
+        if args.action in {'verify-prepare', 'verify', 'verification-show', 'verification-recheck'}:
+            from candidate_search.verifiers import interface
+            if args.action == 'verify-prepare':
+                result = interface.prepare_request(project, args.id, args.claim,
+                    adapter_id=args.adapter, low=args.bounds[0], high=args.bounds[1],
+                    max_cases=args.max_cases, max_seconds=args.max_seconds,
+                    wall_timeout_seconds=args.wall_timeout, proof_file=args.proof_file,
+                    declaration=args.declaration)
+            elif args.action == 'verify':
+                result = interface.verify(project, read_object(Path(args.request)), locks_held=True)
+            elif args.action == 'verification-show':
+                result = interface.show(project, args.request_id)
+            else:
+                result = interface.recheck(project, args.request_id)
+        elif args.action in {'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run'}:
             from candidate_search import scheduler
             if args.action == 'plan':
                 result = scheduler.plan(project, dry_run=True)
@@ -54,6 +69,8 @@ def dispatch(args):
                 revise=args.action == 'revise',
                 expected_revision=getattr(args, 'expected_revision', None))
         research.print_json(result)
+        if args.action in {'verify', 'verification-recheck'} and result.get('result_status') in {'FAILED', 'UNSUPPORTED'}:
+            return 2
     return 0
 
 
@@ -61,7 +78,8 @@ def add_commands(subparsers, add_project):
     top = subparsers.add_parser('candidate', help='候选登记与可追溯分支；不调用模型或修改科学等级')
     actions = top.add_subparsers(dest='action', required=True)
     for action in ('anchor', 'list', 'show', 'propose', 'revise', 'status',
-                   'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run'):
+                   'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run',
+                   'verify-prepare', 'verify', 'verification-show', 'verification-recheck'):
         command = actions.add_parser(action)
         add_project(command)
         command.set_defaults(function=dispatch)
@@ -82,6 +100,20 @@ def add_commands(subparsers, add_project):
             command.add_argument('--attempt-id', required=True)
         if action == 'map-run':
             command.add_argument('--run-id', required=True)
+        if action == 'verify-prepare':
+            command.add_argument('--id', required=True)
+            command.add_argument('--claim', required=True)
+            command.add_argument('--adapter', default='integer-v1')
+            command.add_argument('--bounds', nargs=2, type=int, default=[-3, 3], metavar=('LOW', 'HIGH'))
+            command.add_argument('--max-cases', type=int, default=10000)
+            command.add_argument('--max-seconds', type=float, default=3)
+            command.add_argument('--wall-timeout', type=float, default=5)
+            command.add_argument('--proof-file')
+            command.add_argument('--declaration')
+        if action == 'verify':
+            command.add_argument('--request', required=True)
+        if action in {'verification-show', 'verification-recheck'}:
+            command.add_argument('--request-id', required=True)
         if action == 'status':
             command.add_argument('--id', required=True)
             command.add_argument('--status', required=True, choices=('SCREENING',

@@ -9,17 +9,25 @@ from .common import stamp
 
 
 def source_bindings(project, workspace):
+    from runner_core import project_link
+    from .common import _unlinked_file
     result = {}
+    component=Path(workspace)
+    for ancestor in (component,*component.parents):
+        if ancestor.exists() and project_link(ancestor):
+            raise ValueError('Symlink or junction proof sources are not accepted')
     for path in workspace.rglob('*'):
+        if project_link(path): raise ValueError('Symlink or junction proof sources are not accepted')
         if not path.is_file(): continue
-        if path.is_symlink(): raise ValueError('Symlink proof sources are not accepted')
         if path.suffix in {'.lean', '.toml', '.olean', '.ilean'} or path.name in {'lean-toolchain', 'lake-manifest.json'}:
-            result[path.relative_to(project).as_posix()] = hash_file(path)
+            relative=path.relative_to(project).as_posix()
+            result[relative] = hash_file(_unlinked_file(project,relative,roots={'proofs'}))
     return result
 
 
-def run(project, claim_id, relative, declaration):
-    from .claim_graph import get, record_tool
+def preflight(project, claim_id, relative, declaration):
+    """Read-only existing input checks and the unconditional Lean execution gate."""
+    from .claim_graph import get
     item = get(project, claim_id)
     proof = local_file(project, relative, roots={'proofs'})
     workspace = (project / 'proofs/lean').resolve()
@@ -33,7 +41,7 @@ def run(project, claim_id, relative, declaration):
     elan = shutil.which('elan')
     if not elan:
         receipt.update(status='UNAVAILABLE', reason='elan not in PATH; no tool was downloaded')
-        record_tool(project, claim_id, 'formal_receipt', receipt); return receipt
+        return receipt
     toolchain = workspace / 'lean-toolchain'; manifest = workspace / 'lake-manifest.json'
     if not toolchain.is_file() or not manifest.is_file():
         raise ValueError('Need an existing pinned Lean workspace with lean-toolchain and lake-manifest.json')
@@ -54,5 +62,11 @@ def run(project, claim_id, relative, declaration):
     receipt.update(status='ISOLATION_UNCERTIFIED',
         reason='Lean/Lake execution is blocked: no certified OS isolation backend is implemented',
         scope='Input validation only; no Lean execution or theorem certification occurred')
+    return receipt
+
+
+def run(project, claim_id, relative, declaration):
+    from .claim_graph import record_tool
+    receipt = preflight(project, claim_id, relative, declaration)
     record_tool(project, claim_id, 'formal_receipt', receipt)
     return receipt

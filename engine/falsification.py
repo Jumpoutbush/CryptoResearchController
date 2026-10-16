@@ -88,29 +88,41 @@ def check_witness(statement, witness):
             'is_counterexample': not conclusion}
 
 
-def search(project, claim_id, low=-3, high=3, witness=None):
-    from .claim_graph import get, record_tool
-    item = get(project, claim_id); statement = item['spec'].get('machine_statement')
+def search_statement(statement, low=-3, high=3, witness=None, *, max_cases=10000, max_seconds=3):
+    """Pure bounded data-only integer search, shared by trusted offline workers."""
     validate_statement(statement)
     if type(low) is not int or type(high) is not int or not -1000 <= low <= high <= 1000:
         raise ValueError('Counterexample bounds must satisfy -1000 <= low <= high <= 1000')
-    config = policy(project); start = time.monotonic(); cases = 0; found = None; undefined = 0
+    if type(max_cases) is not int or not 1 <= max_cases <= 100000:
+        raise ValueError('Invalid exact-integer case limit')
+    if type(max_seconds) not in {int,float} or not 0 < max_seconds <= 10:
+        raise ValueError('Invalid exact-integer time limit')
+    start = time.monotonic(); cases = 0; found = None; undefined = 0
     candidates = [witness] if witness is not None else (dict(zip(statement['variables'], values)) for values in itertools.product(range(low, high + 1), repeat=len(statement['variables'])))
     for assignment in candidates:
-        if cases >= config['counterexample_max_cases'] or time.monotonic() - start >= config['counterexample_max_seconds']: break
+        if cases >= max_cases or time.monotonic() - start >= max_seconds: break
         cases += 1
         try: result = check_witness(statement, assignment)
         except ZeroDivisionError:
             undefined += 1; continue
         if result['is_counterexample']:
             found = {'assignment': assignment, **result}; break
+    return {'status': 'EXACT_COUNTEREXAMPLE' if found else 'SEARCHED_NOT_FOUND',
+        'witness': found, 'tested_cases': cases, 'undefined_cases': undefined,
+        'bounds': [low, high], 'seconds': time.monotonic() - start}
+
+
+def search(project, claim_id, low=-3, high=3, witness=None):
+    from .claim_graph import get, record_tool
+    item = get(project, claim_id); statement = item['spec'].get('machine_statement')
+    config = policy(project)
+    result = search_statement(statement, low, high, witness,
+        max_cases=config['counterexample_max_cases'], max_seconds=config['counterexample_max_seconds'])
     receipt = {'schema_version': 1, 'claim_id': claim_id, 'claim_revision': item['revision'],
         'claim_sha256': item['spec_sha256'], 'machine_statement_sha256': object_hash(statement),
-        'status': 'EXACT_COUNTEREXAMPLE' if found else 'SEARCHED_NOT_FOUND',
-        'source_bindings': dict(item['evidence']), 'witness': found, 'tested_cases': cases,
-        'undefined_cases': undefined, 'bounds': [low, high], 'seconds': time.monotonic() - start,
+        **result, 'source_bindings': dict(item['evidence']),
         'statement_match': 'REQUIRES_INDEPENDENT_REVIEW', 'at': stamp(),
         'scope': 'One exact witness refutes the registered integer predicate; bounded failure to find one proves nothing'}
     # An unsuccessful bounded search must not erase an earlier exact refutation.
-    if found: record_tool(project, claim_id, 'counterexample_receipt', receipt)
+    if result['witness']: record_tool(project, claim_id, 'counterexample_receipt', receipt)
     return receipt
