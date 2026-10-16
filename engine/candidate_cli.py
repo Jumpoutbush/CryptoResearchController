@@ -1,0 +1,57 @@
+"""Operator-owned candidate catalog commands; registration never runs research."""
+import contextlib
+from pathlib import Path
+
+import configuration
+from research_quality import read_object
+from route_budget import file_lock
+
+
+def dispatch(args):
+    import research
+    from candidate_search import catalog
+    project = research.resolve_project(args.project)
+    with contextlib.ExitStack() as stack:
+        if args.action not in {'list', 'show', 'anchor'}:
+            stack.enter_context(research.project_lock(project))
+            stack.enter_context(file_lock(configuration.ROOT / 'locks' /
+                                          (configuration.project_id(project) + '.lock')))
+        if args.action == 'list':
+            result = catalog.list_candidates(project)
+        elif args.action == 'show':
+            result = catalog.show(project, args.id, args.revision)
+        elif args.action == 'anchor':
+            result = catalog.anchor(project)
+        elif args.action == 'status':
+            disposition = read_object(Path(args.disposition)) if args.disposition else None
+            result = catalog.transition(project, args.id, args.status, args.reason,
+                expected_revision=args.expected_revision, disposition=disposition)
+        else:
+            result = catalog.propose(project, read_object(Path(args.file)), args.reason,
+                revise=args.action == 'revise',
+                expected_revision=getattr(args, 'expected_revision', None))
+        research.print_json(result)
+    return 0
+
+
+def add_commands(subparsers, add_project):
+    top = subparsers.add_parser('candidate', help='候选登记与可追溯分支；不调用模型或修改科学等级')
+    actions = top.add_subparsers(dest='action', required=True)
+    for action in ('anchor', 'list', 'show', 'propose', 'revise', 'status'):
+        command = actions.add_parser(action)
+        add_project(command)
+        command.set_defaults(function=dispatch)
+        if action == 'show':
+            command.add_argument('--id', required=True)
+            command.add_argument('--revision', type=int)
+        if action in {'propose', 'revise'}:
+            command.add_argument('--file', required=True)
+        if action in {'revise', 'status'}:
+            command.add_argument('--expected-revision', type=int, required=True)
+        if action == 'status':
+            command.add_argument('--id', required=True)
+            command.add_argument('--status', required=True, choices=('SCREENING',
+                'READY_FOR_ATTEMPT', 'REFUTED', 'COVERED', 'RETIRED', 'CONDITIONAL'))
+            command.add_argument('--disposition', help='范围、证据与重启条件 JSON')
+        if action in {'propose', 'revise', 'status'}:
+            command.add_argument('--reason', required=True)
