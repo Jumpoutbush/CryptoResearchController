@@ -15,7 +15,7 @@
 | R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 审查修复后原生41步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
 | R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 审查修复后原生30步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
 | R11 | 候选模型 | DONE | 566612a38bafd37635f1c113c0b2c1e4aea7c8a5 | 专项40/40；真实Windows入口35步；全量721：720通过/1既有平台跳过；check all/doctor通过 | 只登记候选；保守归一化去重；CONDITIONAL不能自动READY；真实监督/Lean阻断 |
-| R12 | 搜索预算 | TODO | — | — | — |
+| R12 | 搜索预算 | DONE | 2ac1e71d83f138364939d79f9fd3e22cb756c1c0 | 候选专项78/78；真实Windows入口63步；全量759：758通过/1既有平台跳过；check all/doctor通过 | 最多3候选的建议窗口；原预算唯一权威；归属不证明提示注入；真实监督/Lean阻断 |
 | R13 | 数学核验适配器 | TODO | — | — | — |
 | R14 | 密码学安全审查 | TODO | — | — | — |
 | R15 | 分支收束 | TODO | — | — | — |
@@ -442,3 +442,45 @@ AIDE固定1d8ec4026c67729443294c8b5c0907242d0de38c，两者MIT；参考文件、
 详见docs/CANDIDATES_R11.md，本会话outputs/R11包含真实命令、正常及故障JSON、文件清单和摘要。
 本轮不导入固定问题、不开始尝试、不改STATE/权威主张/消费；没有付费调用或推送。
 真实监督与Lean继续阻断。R11回执提交后才进入R12；R15及以后未授权进入。
+
+## R12 有界候选调度本地验收回执（2026-10-16）
+
+先验收并提交R11的566612a/5d045bf，再读取当前R12和对应OpenSource附录。
+实现提交 `2ac1e71d83f138364939d79f9fd3e22cb756c1c0`，9份公开文件，不含个人研究记录。
+
+新增确定性只读plan和schedule-status、完整快照CAS的待审select、派发前bind-attempt，
+以及可信原回执的map-run。候选窗口沿用1—3上限，保留已准入分支，再按事实补充候选；
+超额明确延期，窗口外不能选择。所有选择仍execution_allowed=false，不自动导入问题或
+关闭/启动attempt；活动attempt只延期。STOP/NEEDS_INPUT/初始化缺口、未结算或未知调用、
+STATE与原路线last_run漂移、接受事务待恢复、预算耗尽或待复评均阻断准备。
+
+原route/attempt/独立监督及R02预留见证保持唯一消费权威。新历史只记选择和调度归属，
+不增减有效轮数、不退款、不重派。先绑定零调用的原owner，再核验原终态settlement；
+ACCEPTED还要求原COMPLETE包装器回执、精确锚点与路线纪元。旧运行不能事后按问题ID猜归属。
+candidate_injection_proven=false，记录不证明科研代理已读候选卡，也不提升科学等级。
+选择历史中断只重放同一冻结操作；高水位不匹配或未知结果停止审计。
+
+实际命令（cwd均为D:\CryptoResearchController）：
+
+- `python -B -m unittest discover -s tests -p test_candidate_*.py -v`：78/78通过，139.279秒，退出0；
+  包含40项R11和38项R12，新增三候选窗口、预算守恒、旧plan CAS、预绑定、可信回执及本地事务中断恢复。
+- `python -B scripts/verify_r12_offline.py --output <本会话outputs/R12/entry-final>`：63步真实Windows
+  research.cmd通过。临时样例调用原runner.record_round与save_ledger模拟0→1→2验收消费，
+  不在新模块手工增量；双进程唯一选择、未知拒映射、失败回执幂等、窗口外拒选、STOP/复评/耗尽均覆盖。
+  模型/网络/监督/Lean调用均0，只有显式原控制器API改变临时预算，个人项目不参与。
+- `python -B -m unittest discover -s tests -v`：759项，758通过、1项既有POSIX跳过，1077.909秒，退出0。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`退出0。
+- 暂存区和工作区diff --check通过；119份公开Python文件在最终专项/入口/全回归期间摘要完全一致。
+
+843个个人文件路径和SHA不变；27份R01/R02/审查修复门禁与R11候选契约文件保持原字节。
+先行76项/52步回执已标pre-frontier归档，最终验收采用上面的78项/63步，不混用旧结果。
+文献自动覆盖没有独立来源时保持UNKNOWN，已有显式COVERED分支排除；成本仅展示测量事实，
+共享引理已审查不等于候选整体安全，因此不凭自报便宜排名，也没有模型自评/Elo预算分配。
+
+AIDE沿固定1d8ec4026c67729443294c8b5c0907242d0de38c（MIT），OpenEvolve固定
+a1e9d91eecde612f0efc8e8e31f59b36998248c0（Apache-2.0）；具体函数、源文件和完整许可证SHA
+见docs/CANDIDATES_R12.md及outputs/R12/opensource-reference.json。仅只读核验Git对象，未复制安装运行。
+
+本会话outputs/R12保存真实命令、正常/故障JSON、源码摘要和文件清单。未改变个人GOAL、STATE、
+预算、历史、门禁或证明结论，真实监督及Lean继续阻断，无付费轮次或推送。
+R12回执提交后才进入R13，再逐轮完成R14；R15及以后不进入。
