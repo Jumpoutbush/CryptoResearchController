@@ -5,7 +5,7 @@
 | 轮次 | 内容 | 状态 | Git 提交 | 真实测试回执 | 未闭合缺陷 |
 | --- | --- | --- | --- | --- | --- |
 | R01 | 监督契约/快照 | DONE | 4b406f92f39b0851101da7b318df4ada01e5f814 | 专项24/24；全量344：343通过/1原平台跳过；check all与doctor --offline退出0 | 无本轮未闭合缺陷；运行链后续接入另按R02—R05验收 |
-| R02 | 触发/账本 | IN_PROGRESS | 待本地提交 | 专项31/31；全量375：374通过/1原平台跳过；check all与doctor --offline退出0 | 实测完成待提交；R03消费者/指南应用另轮验收 |
+| R02 | 触发/账本 | DONE | 7257e070c20af2b563197c9b748463797a6c40d1 | 专项31/31；全量375：374通过/1原平台跳过；check all与doctor --offline退出0 | 无本轮未闭合缺陷；R03消费者/指南应用另轮验收 |
 | R03 | 只读执行 | TODO | — | — | — |
 | R04 | 指南应用 | TODO | — | — | — |
 | R05 | 监督集成 | TODO | — | — | — |
@@ -47,3 +47,26 @@ R01 最终回归：`python -m unittest discover -s tests -v`，344 项、127.230
 `4b406f92f39b0851101da7b318df4ada01e5f814`（Add bounded supervision contracts and read-only snapshots）。
 两项提交均不包含私人项目、状态、预算账本或日志；未推送。
 上述 IN_PROGRESS/未提交说明是前次回执的历史记录，现在已具备实测证据和真实提交，R01 标记 DONE。
+
+## R02 本地验收与提交回执（2026-10-16）
+
+R01 本地提交和本表更新完成后，才进入 R02。实现提交为
+`7257e070c20af2b563197c9b748463797a6c40d1`
+（Add durable supervision events and shared-budget reservations）。
+本轮变更 12 个控制器、测试及文档文件，不包含私人项目或运行数据。
+
+- `python -B -m unittest discover -s tests -v`：375 项，210.842 秒，退出 0；374 通过、
+  1 个原有 POSIX 模拟可执行程序集成测试在 Windows 跳过。
+- 最后仅把既有重复测试补强为同 ID 连续三次重放，未再改生产代码；随后执行
+  `python -B -m unittest discover -s tests -p "test_supervision_trigger*.py" -v`，
+  31 项全部通过，52.007 秒，退出 0。
+- `python -B research.py check all`、Windows `research.cmd check all`、
+  `research.cmd doctor --offline`、根目录 pending 与项目目录 status 原生命令均退出 0。
+- 正常合并、队列写失败保留科研、预留/完成确认中断、输入丢失、真实双进程竞争和
+  持锁进程终止恢复均由离线测试覆盖。先复现失败再修复，证据留在本地交付目录。
+
+复用原路线计数、复评判定及监督成本余额；新协议默认关闭，启用时本轮只排队。
+843 个私人项目、覆盖配置、状态和日志文件的路径集合及 SHA-256 与开发前完全一致。
+GOAL、STATE、预算、研究历史、门禁和证明结论均未改变；未执行真实付费轮次，未推送。
+说明见 `../SUPERVISION_R02_EVENTS.md`；本次会话的交付目录为 `outputs/R02/`。
+R03 仍为 TODO，不能将旧版相似执行器直接算作 R03 已验收。
