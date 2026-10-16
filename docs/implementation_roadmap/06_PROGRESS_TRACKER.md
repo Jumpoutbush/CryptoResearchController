@@ -9,7 +9,7 @@
 | R03 | 只读执行 | DONE | 1bfad1bc14608777f8922ae0f9c6ffb801538827 | 专项29/29；真实入口6步离线验收；全量423：422通过/1原平台跳过；check all与doctor退出0 | 按附录仅完成Fake离线验收；真实OS隔离未认证，Codex后端阻断，不可真实上线 |
 | R04 | 指南应用 | DONE | 03cb2c2812ca0263fccff42596db893a01b921ab | 专项28/28及门禁补充1项通过；真实入口10步；全量451：450通过/1原平台跳过；旧项目prompt逐字一致 | 真实Codex后端仍阻断；Fake只限临时样例；watch自动消费/应用另按R05验收 |
 | R05 | 监督集成 | DONE | 1695bddbf4e9cfe633fe96bf1bb78bec3fe967ab | 专项20/20；原生run/watch/双进程及杀进程恢复通过；全量471：470通过/1原平台跳过；check all/doctor退出0 | 仅离线验收；真实Codex仍阻断，Fake只限注册临时样例；R06另行开发 |
-| R06 | 图谱投影 | TODO | — | — | — |
+| R06 | 图谱投影 | DONE | a5785130a7816c6739899e37afac9ec504ea2e2c | 专项27/27；双项目原生入口24步；全量498：497通过/1原平台跳过；check all/doctor退出0 | 本轮只读投影已验收；原文页码/失效事件/检索/跨项目复用另按R07—R10；真实监督后端门禁未变 |
 | R07 | 原文溯源 | TODO | — | — | — |
 | R08 | 失效事件 | TODO | — | — | — |
 | R09 | 证据检索 | TODO | — | — | — |
@@ -210,3 +210,47 @@ setup_instruction_file及恢复计划，未安装或运行；来源哈希及测�
 
 R05离线进入条件已满足；真实Codex继续阻断，Fake仅注册临时样例，没有实际付费轮次、
 启用个人项目或推送。依本次用户授权，提交本回执后才读取并继续R06，R07以后保持TODO。
+
+## R06 只读证据投影与历史pin验收（2026-10-16）
+
+先核对R05实现1695bdd及追踪回执5e498f2，确认20项专项、471全量和正常/故障
+原生入口验收通过；实际项目未启用且无未知结果待办。仅在R05提交后读取R06及对应
+OpenSource附录，未读取R07以后开发文档。实现提交
+`a5785130a7816c6739899e37afac9ec504ea2e2c`。
+
+- `python -B -m unittest discover -s tests -p test_knowledge_projection.py -v`：
+  最终27项全部通过，16.014秒，退出0。
+- `python -B scripts/verify_r06_offline.py --output <外部证据目录>`：两个不同前提
+  合成项目、24步实际Windows research.cmd入口通过，退出0，provider_requests=0。
+  使用官方problem/claim/attempt接口；真实查询展示CLAIM→OBLIGATION→PROBLEM_VERSION→GOAL；
+  跨项目ID、删除缓存精确重建、项目目录调用、人工改证据及损坏缓存恢复均通过。
+- `python -B -m unittest discover -s tests -v`：最终498项，580.267秒，退出0；
+  497通过、1个原有POSIX平台用例跳过；本轮新增专项无跳过。
+- `python -B research.py check all`三个项目通过；原生doctor --offline退出0；
+  diff --check通过。完整命令、退出码、源摘要及原生正常/故障证据保存在outputs/R06/。
+- 三个实际项目只读投影成功，原claim status逐项不变，均未创建个人缓存；
+  843个个人项目、私有配置、状态和日志文件路径及SHA与R06开发前完全一致。
+  原R01—R05、claim_graph、旧knowledge_graph/history等17份源码保持原字节；
+  GOAL、STATE、预算、历史、门禁与证明结论均未改变。
+
+复用claim_graph.status、problem_compiler.pool、旧只读memory视图、原route/attempt回执。
+新增knowledge包只生成state/knowledge/index.json可删缓存，不调用refresh/save/模型。
+schema_version=1、builder_version=R06.1；稳定项目/实体/原ID/版本，边保留来源SHA与scope。
+JSON缓存采用原原子写和route/core/queue锁序；status/explain从live资料派生，不信任缓存。
+当前主张完整继承proof/novelty/失效原因，历史版本不提升；claim/memory pin同时校验
+版本与spec SHA，多级历史链保留。旧GOAL和memory冻结目标不重绑，路线重访不重写
+原run纪元。过期审查来源标待刷新，证明/新颖性/形式审查状态分开继承。
+失败文本仅unverified/containment，工具记录不能独立证明；机器反例仅依canonical裁决。
+来源中途变化或构建写入失败保留旧缓存；损坏缓存可显式重建，不写回任何科学状态。
+
+接口使用knowledge.build.build(controller,project)以对齐既有显式控制器路径助手；
+CLI保证与configuration.ROOT一致。旧knowledge和claim入口保留，只增build/explain及
+status.projection；新模板默认不创建缓存。限制和操作见../KNOWLEDGE_R06_PROJECTION.md。
+
+OpenSource参考ARA固定SHA `e52a925e9d03b4ada3008653e72f99b04116fca2`（MIT，2026
+Orchestra Research），只读核验logic/claims、trace/exploration_tree及research-manager
+对应类型/来源/失败轨迹规范。具体源码链接、许可证与SHA-256及测试映射已记录，
+没有复制、安装或执行上游系统/技能。
+
+没有实际付费科研/监督轮次，没有启用个人项目或推送；真实Codex仍阻断。
+本次连续两轮开发完成，停在R06，R07—R20保持TODO。
