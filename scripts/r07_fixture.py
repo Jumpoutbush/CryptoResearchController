@@ -22,7 +22,7 @@ def pdf_bytes(pages):
     return raw+f'trailer << /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{start}\n%%EOF\n'.encode()
 
 
-def seed(project):
+def seed(project,claim_id='C-1'):
     def put(relative,value):
         path=project/relative; path.parent.mkdir(parents=True,exist_ok=True)
         if isinstance(value,bytes): path.write_bytes(value)
@@ -38,7 +38,7 @@ def seed(project):
     index=configuration.load_json(project/'literature/pdf_index.json')
     # Explicit operator layout attestation for a plain ASCII synthetic page, never a theorem review.
     index['files']['toy-v1.pdf']['math_layout_verified']=True; put('literature/pdf_index.json',index)
-    review={'schema_version':1,'claim_id':'C-1','paper':{'title':'Same synthetic title','version':'v1',
+    review={'schema_version':1,'claim_id':claim_id,'paper':{'title':'Same synthetic title','version':'v1',
         'source_file':uploads[1]['file'],'sha256':uploads[1]['sha256']},'fulltext_status':'TECHNICALLY_CHECKED',
         'author_claim':'Integer square nonnegativity','technical_statement':'Every integer square is nonnegative',
         'source_location':'Theorem 1, PDF page 2','comparison':[{'dimension':d,'idea':'Integer invariant',
@@ -51,7 +51,7 @@ def seed(project):
     span={'id':'T1','source_file':uploads[1]['file'],'sha256':uploads[1]['sha256'],'version':'v1',
         'authors':['Synthetic fixture author'],'venue':'Offline fixture','url':'https://example.invalid/v1',
         'review_file':rel,'review_sha256':hash_file(project/rel),'claim_revision':1,
-        'claim_spec_sha256':configuration.load_json(project/'research/discovery/CLAIM_GRAPH.json')['claims'][0]['spec_sha256'],
+        'claim_spec_sha256':next(c['spec_sha256'] for c in configuration.load_json(project/'research/discovery/CLAIM_GRAPH.json')['claims'] if c['id']==claim_id),
         'extraction':{'source_file':'literature/text/toy-v1.txt','sha256':hash_file(project/'literature/text/toy-v1.txt'),
             'parser':'PyMuPDF','version':str(pymupdf.VersionBind)},
         'location':{'page_start':2,'page_end':2,'section':'Synthetic theorem','theorem':'Theorem 1.',

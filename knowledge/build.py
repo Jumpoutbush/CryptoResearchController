@@ -176,6 +176,12 @@ def derive(controller, project):
             if not receipt: continue
             rid = g.node('SOURCE_VERSION','claim/'+item['id']+'/'+str(item['revision'])+'/'+field,
                 canonical_hash(receipt),CLAIMS,record_kind=field,
+                claim_id=item['id'],claim_revision=item['revision'],
+                applicability={'assumptions':spec['assumptions'],'machine_statement':spec.get('machine_statement'),
+                    'claim_spec_sha256':item['spec_sha256'],'machine_statement_sha256':receipt.get('machine_statement_sha256'),
+                    'source_bindings':receipt.get('source_bindings'),
+                    'witness':receipt.get('witness'),'bounds':receipt.get('bounds'),'receipt_scope':receipt.get('scope'),
+                    'scope':'MACHINE_STATEMENT_ONLY' if field=='counterexample_receipt' else 'DECLARED_FORMAL_STATEMENT_ONLY'},
                 verified_status='TOOL_RECEIPT_NOT_PROOF',tool_status=receipt.get('status'))
             refuted = field=='counterexample_receipt' and 'MACHINE_STATEMENT_REFUTED' in status['invalidation_reasons']
             if refuted: g.edge(rid,uid,'REFUTES',CLAIMS,provenance='CANONICAL_COUNTEREXAMPLE_STATUS',verified='MACHINE_STATEMENT_REFUTED')
@@ -201,6 +207,7 @@ def derive(controller, project):
         metadata = memory.get('metadata',memory.get('spec',{}).get('metadata',{}))
         text_reference = kind=='FAILED_BRANCH' and path.endswith('.md')
         mid = g.node(kind,'memory/'+memory['id'],memory['revision'],path,
+            memory_id=memory['id'],current=not memory.get('historical',False),
             title=memory['title'],record_kind=memory['kind'],validity=memory['validity'],
             goal_sha256=memory_goals.get((memory['id'],memory['revision']),memory.get('goal_sha256',g.goal)),
             invalidation_reasons=memory.get('invalidation_reasons',['HISTORICAL_REVISION_NOT_REVALIDATED']),parent_id=None,
@@ -300,19 +307,23 @@ def cache_path(controller, project):
     return _path(controller,'state/knowledge/'+configuration.project_id(project)+'/index.json')
 
 
-def build(controller, project, *, dry_run=False):
+def build(controller, project, *, dry_run=False, cache_only=False):
     def perform():
         graph = derive(controller,project)
         raw = (json.dumps(graph,ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n').encode('utf8')
         if len(raw)>16_000_000: raise ValueError('Projection cache exceeds 16 MB')
+        from . import events
+        history=events.summary(controller,project)
         if not dry_run:
             import supervision
+            if not cache_only: history=events.record(controller,project,graph)
             target = cache_path(controller,project)
             if not target.exists() or target.read_bytes()!=raw: supervision._write(target,raw)
-        return {'schema_version':1,'builder_version':schema.BUILDER_VERSION,'project_id':graph['project_id'],
+        return {'schema_version':schema.SCHEMA_VERSION,'builder_version':schema.BUILDER_VERSION,'project_id':graph['project_id'],
             'graph_sha256':graph['graph_sha256'],'input_sha256':graph['input_sha256'],
             'node_count':len(graph['nodes']),'edge_count':len(graph['edges']),
-            'source_manifest':graph['source_manifest'],'coverage_gaps':graph['coverage_gaps'],'dry_run':dry_run}
+            'source_manifest':graph['source_manifest'],'coverage_gaps':graph['coverage_gaps'],'dry_run':dry_run,
+            'history':history,'cache_only':cache_only}
     if dry_run: return perform()
     from supervision_scheduler import _locks
     with _locks(controller,project,execution=True):
@@ -328,8 +339,10 @@ def status(controller, project):
             if path.stat().st_size>16_000_000: raise ValueError('Oversized cache')
             cached = schema.validate(configuration.load_json(path))
             state = 'CURRENT' if cached==graph else 'STALE'
-        except (ValueError,KeyError,TypeError,OSError): state = 'CORRUPT'
-    return {'schema_version':1,'builder_version':schema.BUILDER_VERSION,'cache_status':state,
+        except (ValueError,KeyError,TypeError,OSError,RecursionError): state = 'CORRUPT'
+    from . import events
+    return {'schema_version':schema.SCHEMA_VERSION,'builder_version':schema.BUILDER_VERSION,'cache_status':state,
+        'history':events.summary(controller,project),
         'graph_sha256':graph['graph_sha256'],'node_count':len(graph['nodes']),
         'edge_count':len(graph['edges']),'coverage_gaps':graph['coverage_gaps']}
 
@@ -346,7 +359,9 @@ def explain_claim(controller, project, claim_id, revision=None):
         added |= {e['from'] for e in graph['edges'] if e['to'] in reachable and e['relation'] in {'SUPPORTS','REFUTES'}}
         if added <= reachable: break
         reachable |= added
-    return {'schema_version':1,'project_id':graph['project_id'],'graph_sha256':graph['graph_sha256'],
+    from . import events,lineage
+    return {'schema_version':schema.SCHEMA_VERSION,'project_id':graph['project_id'],'graph_sha256':graph['graph_sha256'],
+        'history':events.summary(controller,project),'lineage':lineage.causes(graph,matches[0]),
         'claim':matches[0],'nodes':[n for n in graph['nodes'] if n['id'] in reachable],
         'edges':[e for e in graph['edges'] if e['from'] in reachable and e['to'] in reachable],
         'coverage_gaps':graph['coverage_gaps']}

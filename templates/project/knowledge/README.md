@@ -11,3 +11,8 @@ The optional `literature/source_spans.json` operator registry binds exact origin
 PDF pages, extraction and technical-review hashes. See `docs/KNOWLEDGE_R07_SOURCES.md`
 in the controller. Old free-form locations remain unverified; no automatic download
 or scientific proof promotion occurs when building this index.
+
+Graph builds also retain an append-only observation history beside the disposable
+index. `knowledge diff --from-index <sha> --to-index <sha>` compares recorded versions;
+`knowledge explain` shows original invalidation causes and exact old dependency pins.
+Preserve `history.json` when deleting an index. See `docs/KNOWLEDGE_R08_LINEAGE.md`.
