@@ -310,6 +310,13 @@ def cache_path(controller, project):
 def build(controller, project, *, dry_run=False, cache_only=False):
     def perform():
         graph = derive(controller,project)
+        from engine.claim_graph import pending_revocations
+        pending = pending_revocations(project)
+        if _manifest(controller, project) != graph['source_manifest']: raise ValueError('SOURCE_CHANGED_DURING_BUILD')
+        if pending and not dry_run and not cache_only:
+            raise ValueError('CANONICAL_REVOCATION_OBSERVATION_REQUIRED: run research.cmd claim refresh '
+                + configuration.project_id(project) + ' before rebuilding; scopes: '
+                + ', '.join(item['claim_id'] + '/' + item['slot'] for item in pending))
         raw = (json.dumps(graph,ensure_ascii=False,sort_keys=True,indent=2,allow_nan=False)+'\n').encode('utf8')
         if len(raw)>16_000_000: raise ValueError('Projection cache exceeds 16 MB')
         from . import events
@@ -323,7 +330,7 @@ def build(controller, project, *, dry_run=False, cache_only=False):
             'graph_sha256':graph['graph_sha256'],'input_sha256':graph['input_sha256'],
             'node_count':len(graph['nodes']),'edge_count':len(graph['edges']),
             'source_manifest':graph['source_manifest'],'coverage_gaps':graph['coverage_gaps'],'dry_run':dry_run,
-            'history':history,'cache_only':cache_only}
+            'history':history,'cache_only':cache_only,'pending_revocations':pending}
     if dry_run: return perform()
     from supervision_scheduler import _locks
     with _locks(controller,project,execution=True):

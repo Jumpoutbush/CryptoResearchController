@@ -329,6 +329,15 @@ def execute(controller, project, event_id, *, executor=None, dry_run=False):
             'call_phase': calls.recovery_info(controller, project, event_id, saved)['call_phase']}
     if saved: return _replay(controller, project, event_id, saved, record)
     if not view['enabled']: return {'status': 'BLOCKED', 'reason': 'DISABLED', 'advisory_only': True}
+    if executor.backend == 'codex':
+        # A forged/stale preflight capability cannot reserve or dispatch a real
+        # call. This is the same unconditional boundary used by legacy entries.
+        try:
+            CodexSupervisorExecutor._require_isolation()
+        except ValueError as exc:
+            _audit(controller, project, event_id, {'status': 'BLOCKED', 'stage': 'ISOLATION', 'reason': str(exc)})
+            return {'status': 'BLOCKED', 'reason': str(exc), 'advisory_only': True,
+                    'automatic_retry_allowed': False}
     try:
         data = review_data(record)
         if record['snapshot']['defaults']['max_snapshot_bytes'] < 8192: raise ValueError('RECEIPT_BOUND_TOO_SMALL')

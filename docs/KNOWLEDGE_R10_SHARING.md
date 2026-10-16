@@ -109,11 +109,12 @@ queries from using old index/cache content; it cannot erase a report already sav
 by its recipient. Disable global/source/target `enabled` or remove a whitelist entry
 to stop future sharing. No migration, project creation or budget reset is performed.
 
-R06-R09 retain their own current-authority/cache/history contracts. Sharing does not
-complete missing same-revision review history (F07), repair canonical ordinary pins
-(F06), or change R08 exact-byte restoration semantics. Those review findings remain
-in `REVIEW_A0E23E3_FOLLOWUP.md`. The source preview inherits R09's malformed-pin
-rejection; consumers do not claim to revalidate private canonical authority.
+R06-R09 retain their current-authority/cache contracts. The review fixes add canonical
+ordinary-pin validation and complete append-only receipts for new review/tool operations.
+Missing old operations remain unavailable. Explicit claim refresh persists scope
+revocations; restoring bytes after that observation cannot reapprove old receipts.
+Sharing never repairs those pins or imports approval. Consumers do not revalidate
+private canonical authority. Details are in `REVIEW_A0E23E3_FOLLOWUP.md`.
 
 OpenSource reference: [ARA pinned e52a925](https://github.com/ARA-Labs/Agent-Native-Research-Artifact/tree/e52a925e9d03b4ada3008653e72f99b04116fca2), MIT,
 LICENSE SHA-256 `25ba8a25365fdc8475b0f7b4818d8ea629cb69d24e30632b0e1a95c759d7368a`.
@@ -128,5 +129,5 @@ Offline checks: `test_cross_project_isolation.py`, `test_knowledge_e2e.py`, and
 `scripts/verify_r10_offline.py`. The last uses actual Windows `research.cmd` in two
 temporary NTRU toy projects, including a guarded consumer read, source expiration,
 revocation, model pin rejection, cache reconstruction and local revision invalidation.
-T07-T09 are offline development checks; unresolved review findings and the R08
-contract decision remain explicit. This is not approval for live paid deployment.
+T07-T09 are offline development checks. The user-confirmed R08 revalidation policy
+is explicit; this is not approval for live paid deployment.

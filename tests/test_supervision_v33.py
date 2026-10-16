@@ -121,7 +121,10 @@ class SupervisionV33Tests(unittest.TestCase):
                     (directory / 'output.json').write_text(json.dumps(payload), encoding='utf-8')
                     return process
 
-                with mock.patch.object(supervision.shutil, 'which', return_value='fake-offline-codex'), \
+                # Retired transport's wire compatibility, using only a mock
+                # process. Production live/apply is blocked by its real gate.
+                with mock.patch.object(supervision, '_require_legacy_backend'), \
+                     mock.patch.object(supervision.shutil, 'which', return_value='fake-offline-codex'), \
                      mock.patch.object(supervision.subprocess, 'Popen', side_effect=launch), \
                      self.assertRaises(ValueError):
                     supervision._execute(self.root, self.project, directory,

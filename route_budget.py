@@ -184,13 +184,115 @@ def make_epoch(route: str, epoch_id: int, before_run: str | None) -> dict:
             "last_processed_run": before_run, "counted_run_ids": [], "closed": False}
 
 
+def registry_path(path: Path) -> Path:
+    """Independent route registration witness; never stored inside the project."""
+    path = Path(path)
+    if path.parent.name != 'routes':
+        raise ValueError('Route authority must live in state/routes')
+    return path.parent.parent / 'route_registry' / path.name
+
+
+def _ledger_bytes(data: dict) -> bytes:
+    return (json.dumps(data, indent=2, ensure_ascii=False) + '\n').encode('utf8')
+
+
+def _sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _file_sha(path: Path):
+    return _sha(path.read_bytes()) if path.is_file() else None
+
+
+def _validate_ledger(data: dict, identity: str) -> None:
+    if (not isinstance(data, dict) or data.get('schema_version') != 1
+            or data.get('project_id', identity) != identity):
+        raise ValueError('Route ledger version or project identity mismatch')
+    if not isinstance(data.get('epochs'), list) or not data['epochs'] or not isinstance(data.get('events'), list):
+        raise ValueError('Route ledger authority is empty or incomplete; explicit recovery is required')
+    for epoch in data['epochs']:
+        if not isinstance(epoch, dict) or not isinstance(epoch.get('route'), str) or not epoch['route']:
+            raise ValueError('Route ledger epoch identity is invalid')
+        for name in ('effective_rounds', 'stagnation', 'extensions_used'):
+            if type(epoch.get(name)) is not int or epoch[name] < 0:
+                raise ValueError('Route ledger consumption is invalid: ' + name)
+        ids = epoch.get('counted_run_ids')
+        if (not isinstance(ids, list) or any(not isinstance(run, str) or not run for run in ids)
+                or len(ids) != len(set(ids)) or len(ids) > epoch['effective_rounds']):
+            raise ValueError('Route ledger counted run authority is invalid')
+
+
+def _registry(path: Path):
+    witness = registry_path(path)
+    if not witness.exists(): return None
+    data = read_json(witness)
+    registration = data.get('budget_registration_id')
+    if (data.get('schema_version') != 1 or data.get('project_id') != path.stem
+            or not {'committed', 'pending'} <= set(data)
+            or not isinstance(registration, str) or not re.fullmatch(r'[0-9a-f]{64}', registration)):
+        raise ValueError('Route registration witness is invalid')
+    committed = data.get('committed')
+    if committed is not None:
+        if (not isinstance(committed, dict) or type(committed.get('sequence')) is not int
+                or committed['sequence'] < 1 or not isinstance(committed.get('ledger_sha256'), str)
+                or not re.fullmatch(r'[0-9a-f]{64}', committed['ledger_sha256'])):
+            raise ValueError('Route registration committed witness is invalid')
+    pending = data.get('pending')
+    if pending is not None:
+        if (not isinstance(pending, dict) or not isinstance(pending.get('afterimage'), dict)
+                or type(pending.get('sequence')) is not int
+                or pending.get('sequence') != (committed['sequence'] + 1 if committed else 1)
+                or not (pending.get('from_sha256') is None or
+                    isinstance(pending['from_sha256'], str) and re.fullmatch(r'[0-9a-f]{64}', pending['from_sha256']))
+                or committed is not None and pending.get('from_sha256') != committed['ledger_sha256']
+                or pending.get('to_sha256') != _sha(_ledger_bytes(pending['afterimage']))
+                or pending['afterimage'].get('budget_registration_id') != registration):
+            raise ValueError('Route registration pending transition is invalid')
+        _validate_ledger(pending['afterimage'], path.stem)
+    elif committed is None:
+        raise ValueError('Route registration has no committed authority')
+    return data
+
+
+def _validate_authority(path: Path, ledger: dict, witness) -> None:
+    registration = ledger.get('budget_registration_id')
+    if witness is None:
+        if registration is not None:
+            raise ValueError('Route registration witness is missing; do not re-register or clear consumption')
+        return
+    if witness.get('pending') is not None:
+        raise ValueError('Route authority has a pending transition; explicit recover-ledger is required')
+    if registration != witness['budget_registration_id']:
+        raise ValueError('Route ledger registration marker is missing or mismatched')
+    if _file_sha(path) != witness['committed']['ledger_sha256']:
+        raise ValueError('Route ledger SHA differs from latest registered authority; stale backup or corruption')
+
+
+def _no_budget_regression(before: dict, after: dict) -> None:
+    for old in before['epochs']:
+        matching = [epoch for epoch in after['epochs'] if epoch['route'] == old['route']]
+        if not matching:
+            raise ValueError('Route authority cannot discard a historical route budget')
+        for name in ('effective_rounds', 'extensions_used', 'operator_added_rounds'):
+            if max(epoch.get(name, 0) for epoch in matching) < old.get(name, 0):
+                raise ValueError('Route authority cannot roll back consumed or added budget: ' + name)
+        retained = {run for epoch in matching for run in epoch['counted_run_ids']}
+        if not set(old['counted_run_ids']) <= retained:
+            raise ValueError('Route authority cannot discard counted run IDs')
+
+
 def load_ledger(controller: Path, project: Path, state: dict) -> tuple[Path, dict, dict]:
     path = controller / "state" / "routes" / (project_key(project) + ".json")
+    witness = _registry(path)
     if path.exists():
         ledger = read_json(path)
-        if ledger.get('schema_version') != 1 or ledger.get('project_id', project_key(project)) != project_key(project):
-            raise ValueError('route ledger version or project identity mismatch')
+        _validate_ledger(ledger, project_key(project))
+        _validate_authority(path, ledger, witness)
     else:
+        if witness is not None:
+            raise ValueError('Registered route ledger authority is missing; explicit recovery is required')
+        if state.get('last_run') is not None:
+            raise ValueError('Existing research history requires an explicit operator budget baseline registration')
         ledger = {"schema_version": 1, "project_id": project_key(project), "project": str(project.resolve()), "epochs": [],
                   "events": [], "created": stamp()}
     ledger['project_id'] = project_key(project)
@@ -222,11 +324,147 @@ def load_ledger(controller: Path, project: Path, state: dict) -> tuple[Path, dic
     return path, ledger, ledger["epochs"][-1]
 
 
+def _complete_pending(path: Path, witness: dict) -> None:
+    pending = witness['pending']
+    actual = _file_sha(path)
+    if actual not in {pending['from_sha256'], pending['to_sha256']}:
+        raise ValueError('Pending route recovery inputs changed; restore exact witnessed authority first')
+    if actual != pending['to_sha256']:
+        atom_json(path, pending['afterimage'])
+    if _file_sha(path) != pending['to_sha256']:
+        raise ValueError('Route ledger did not match the pending afterimage')
+    witness['committed'] = {'sequence': pending['sequence'], 'ledger_sha256': pending['to_sha256']}
+    witness['pending'] = None
+    atom_json(registry_path(path), witness)
+
+
+def recover_ledger(path: Path, reason: str | None = None) -> dict:
+    """Finish only an already prepared local afterimage; never infer missing costs."""
+    path = Path(path)
+    witness = _registry(path)
+    if witness is None:
+        return {'status': 'NO_REGISTERED_TRANSITION'}
+    if witness.get('pending') is None:
+        if not path.is_file():
+            raise ValueError('Registered route ledger authority is missing; restore latest witnessed backup')
+        ledger = read_json(path); _validate_ledger(ledger, path.stem)
+        _validate_authority(path, ledger, witness)
+        return {'status': 'ALREADY_COMMITTED', 'ledger_sha256': _file_sha(path)}
+    target = witness['pending']['to_sha256']
+    _complete_pending(path, witness)
+    if reason is not None:
+        witness.setdefault('recoveries', []).append({'at': stamp(), 'reason': reason,
+            'ledger_sha256': target, 'kind': 'PREPARED_LOCAL_AFTERIMAGE'})
+        atom_json(registry_path(path), witness)
+    return {'status': 'RECOVERED_LOCAL_AFTERIMAGE', 'ledger_sha256': target}
+
+
 def save_ledger(path: Path, ledger: dict) -> None:
-    # hard cap only audit-event display history; run IDs remain intact for idempotency
-    if len(ledger["events"]) > 3000:
-        ledger["events"] = ledger["events"][-3000:]
-    atom_json(path, ledger)
+    path = Path(path)
+    _validate_ledger(ledger, path.stem)
+    # Display-history truncation is unchanged. Counted run identities remain intact.
+    if len(ledger['events']) > 3000:
+        ledger['events'] = ledger['events'][-3000:]
+    witness = _registry(path)
+    if witness is not None:
+        registration = witness['budget_registration_id']
+        if ledger.get('budget_registration_id', registration) != registration:
+            raise ValueError('Route ledger registration identity changed')
+        ledger['budget_registration_id'] = registration
+        desired = _sha(_ledger_bytes(ledger))
+        if witness.get('pending') is not None:
+            if witness['pending']['to_sha256'] != desired:
+                raise ValueError('Another pending route afterimage must be recovered first')
+            _complete_pending(path, witness)
+            return
+        if not path.is_file():
+            raise ValueError('Registered route ledger authority is missing; explicit restore required')
+        current = read_json(path); _validate_ledger(current, path.stem)
+        _validate_authority(path, current, witness)
+        _no_budget_regression(current, ledger)
+        if desired == witness['committed']['ledger_sha256']: return
+    else:
+        if ledger.get('budget_registration_id') is not None:
+            raise ValueError('Route registration witness is missing; refusing to reset its high-water mark')
+        if path.exists():
+            current = read_json(path); _validate_ledger(current, path.stem)
+            if current.get('budget_registration_id') is not None:
+                raise ValueError('Route registration witness is missing')
+            _no_budget_regression(current, ledger)
+        registration = _sha(_ledger_bytes(ledger))
+        ledger['budget_registration_id'] = registration
+        witness = {'schema_version': 1, 'project_id': path.stem,
+                   'budget_registration_id': registration, 'registered_at': stamp(),
+                   'committed': None, 'pending': None}
+        desired = _sha(_ledger_bytes(ledger))
+    sequence = witness['committed']['sequence'] + 1 if witness['committed'] else 1
+    import copy
+    witness['pending'] = {'sequence': sequence, 'from_sha256': _file_sha(path),
+        'to_sha256': desired, 'afterimage': copy.deepcopy(ledger), 'prepared_at': stamp()}
+    atom_json(registry_path(path), witness)
+    _complete_pending(path, witness)
+
+
+def register_baseline(controller: Path, project: Path, baseline: dict, reason: str) -> dict:
+    """Explicit operator migration only; it cannot overwrite an existing authority."""
+    import copy
+    if not isinstance(reason, str) or len(reason.strip()) < 12:
+        raise ValueError('Budget registration requires an explicit operator reason of at least 12 characters')
+    path = Path(controller) / 'state/routes' / (project_key(project) + '.json')
+    if path.exists() or registry_path(path).exists():
+        raise ValueError('Budget authority is already present or registered; baseline cannot reset it')
+    baseline = copy.deepcopy(baseline)
+    _validate_ledger(baseline, project_key(project))
+    if baseline.get('budget_registration_id') is not None:
+        raise ValueError('A baseline cannot import an existing registration identity')
+    state = state_read(project)
+    if (baseline['epochs'][-1]['route'] != selected_route(state)
+            or baseline['epochs'][-1].get('last_processed_run') != state.get('last_run')):
+        raise ValueError('Operator baseline must bind the current route and exact last_run')
+    baseline.update(project_id=project_key(project), project=str(project.resolve()))
+    baseline['events'].append({'type': 'OPERATOR_BUDGET_BASELINE', 'reason': reason.strip(), 'at': stamp(),
+        'scope': 'OPERATOR_CONFIRMED_HISTORICAL_CONSUMPTION_NOT_RECONSTRUCTED'})
+    save_ledger(path, baseline)
+    return {'status': 'BASELINE_REGISTERED', 'ledger_sha256': _file_sha(path),
+            'budget_registration_id': baseline['budget_registration_id']}
+
+
+def restore_registered_ledger(controller: Path, project: Path, backup: Path, reason: str) -> dict:
+    if not isinstance(reason, str) or len(reason.strip()) < 12:
+        raise ValueError('Budget restoration requires an explicit operator reason of at least 12 characters')
+    path = Path(controller) / 'state/routes' / (project_key(project) + '.json')
+    witness = _registry(path)
+    if witness is None:
+        raise ValueError('No independent route witness exists; explicit baseline registration is required')
+    source = Path(backup).read_bytes()
+    expected = (witness['pending']['to_sha256'] if witness.get('pending') else witness['committed']['ledger_sha256'])
+    if _sha(source) != expected:
+        raise ValueError('Backup SHA must equal the latest route witness; old backup rollback is forbidden')
+    data = json.loads(source.decode('utf-8-sig'))
+    _validate_ledger(data, project_key(project))
+    if data.get('budget_registration_id') != witness['budget_registration_id']:
+        raise ValueError('Backup registration identity differs from witness')
+    # Preserve damaged bytes for operator audit; never rewrite project state or evidence.
+    if path.exists() and _file_sha(path) != expected:
+        import uuid
+        saved = Path(controller) / 'backups/route-authority' / (path.stem + '-' + uuid.uuid4().hex + '.json')
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy2(path, saved)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix='.route-restore-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(source); stream.flush(); os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary): os.unlink(temporary)
+    if witness.get('pending') is not None:
+        _complete_pending(path, witness)
+        witness = _registry(path)
+    witness.setdefault('recoveries', []).append({'at': stamp(), 'reason': reason.strip(), 'ledger_sha256': expected})
+    atom_json(registry_path(path), witness)
+    return {'status': 'EXACT_WITNESSED_BACKUP_RESTORED', 'ledger_sha256': expected}
 
 
 def total_budget(epoch: dict, policy: dict) -> int:

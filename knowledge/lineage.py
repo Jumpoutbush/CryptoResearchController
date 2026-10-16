@@ -104,6 +104,9 @@ def causes(graph,claim):
                 'state':state,'evidence':evidence(node)}]); continue
         for reason in reasons:
             step={id_field:cid,'reason':reason,'state':state}
+            if reason.startswith('REVALIDATION_REQUIRED:'):
+                scope=reason.split(':',1)[1]
+                step['persisted_revocation']=node.get('revocation_latches',{}).get(scope)
             if reason.startswith(('DEPENDENCY_REVISED:','DEPENDENCY_NOT_VALID:','DEPENDENCY_MISSING:',
                     'KNOWLEDGE_REVISED:','KNOWLEDGE_NOT_VALID:','KNOWLEDGE_MISSING:')):
                 dep=reason.split(':',1)[1]; use_memory=not is_claim or reason.startswith('KNOWLEDGE_')

@@ -918,6 +918,12 @@ def main(argv=None):
     if args.prepare_pro:
         pro_handoff(project, state); return 0
     with file_lock(project):
+        if os.environ.get('CRC_TRANSACTION_EXTERNAL') != '1':
+            from research_acceptance import load as acceptance_load
+            pending = acceptance_load(ROOT, project)
+            if pending and pending['phase'] not in {'COMPLETE', 'ABORTED'}:
+                print('WRAPPER_ACCEPTANCE_PENDING: use the original wrapper recovery; no direct core execution', flush=True)
+                return 3
         if args.fetch_only:
             info = update_literature(project, offline=args.offline)
             print(json.dumps(info, ensure_ascii=False, indent=2), flush=True)

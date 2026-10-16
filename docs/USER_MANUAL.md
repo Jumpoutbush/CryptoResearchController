@@ -324,7 +324,8 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 ## v3.3 独立监督入口
 
 按新分轮手册开发的 R02 协议见 [R02 触发与预留](SUPERVISION_R02_EVENTS.md)。它默认关闭；
-启用后只排队，尚无新模型消费者或指南应用。以下描述原监督流程。
+R03—R05 已实现离线消费与指南事务，真实 Codex 隔离未认证，所有新旧真实监督入口均阻断。
+Fake 只允许临时合成项目。以下旧配置命令不会绕过执行门禁。
 `supervise` 是 `supervision` 的完整别名；新增 `supervise pending --dry-run` 为只读查询。
 
 完整的开启、独立预算、报告查看、冲突处理与回滚说明见 [独立科研监督](SUPERVISION.md)，本次范围及后续路线见 [v3.3 发布说明](RELEASE_V3.3.md)。现有研究命令保持有效；监督使用独立进程和独立账本，在每三轮已验收科研工作及预算复评节点检查主线。
@@ -337,11 +338,34 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 .\research.cmd supervision show secagg-research
 ```
 
-`status`、`history`、`show` 和 `run --dry-run` 不调用模型。`configure` 只保存监督设置和登记基线，不修改科研状态。只有真实研究触发或显式 `supervision run` 才调用监督模型；监督费用与科研轮次分开记账。
+`status`、`history`、`show` 和 `run --dry-run` 不调用模型。`configure` 只保存监督设置和登记基线，不修改科研状态。旧 live/apply 已退役；新真实后端仍阻断，触发或 `--force` 不开放执行。历史 running 无可信完成回执时保留预留并报告未知结果。
 
 ## v3.4 长期科研知识入口
 
 完整的知识类型、结构化模板、来源定位、版本及失效恢复说明见 [长期科研知识图谱](RESEARCH_KNOWLEDGE_V3.4.md)。知识与原有主张共用 `research/discovery/CLAIM_GRAPH.json`；保留原主张版本、审核和证据，原状态与预算不迁移。
+
+审查修复后的恢复规则见 [审查跟踪](REVIEW_A0E23E3_FOLLOWUP.md)。路线账本和
+`state/route_registry/<id>.json` 必须一起备份；缺失、空或回退的账本停止执行，
+不重新发放初始预算。以下都是显式本地操作，不调用模型：
+
+```powershell
+.\research.cmd budget my-project --recover-ledger --reason "Complete the original trusted pending local ledger transition"
+.\research.cmd budget my-project --restore-ledger D:\Backups\latest-route.json --reason "Restore the exact latest independently checked route ledger backup"
+.\research.cmd budget my-project --register-baseline D:\Materials\historical-route.json --reason "Register the independently audited complete historical consumption baseline"
+.\research.cmd claim refresh my-project
+```
+
+`--recover-ledger` 只补齐见证中同一个 afterimage；恢复备份必须匹配见证最新 SHA。
+首次登记只适用于尚未登记的历史项目，必须提供已核对的完整账本，不能猜测或填写零消费
+代替丢失权威。登记/恢复选项互斥，也不与修改预算策略混用。
+
+`claim refresh` 是明确的持久失效观察：写入 canonical 失效事件后，即使恢复原文/审查/
+日志字节，旧认可也不会复活，须逐 scope 独立重审。状态、上下文、解释与派生构图仍不
+写主张权威；构图遇到尚未记录的新失效时会先停止并提示该命令。纯只读瞬时检查没有
+新增持久事件，不能记住文件此前发生过而后恢复的变化。
+
+科研接受恢复由原 run ID 和持久接受决定驱动，不用 `--route-sync` 代替。未知执行或
+检查无完成回执、人工第三版本冲突均保留预留并停止审计，不自动重试。
 
 ```powershell
 .\research.cmd knowledge status all

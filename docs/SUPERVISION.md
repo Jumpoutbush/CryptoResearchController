@@ -1,5 +1,13 @@
 # v3.3：独立科研监督与安全指南修订
 
+当前执行边界（2026-10-16 审查修复）：新 R03 真实 Codex 后端固定返回
+`BLOCKED_UNVERIFIED_OS_SANDBOX`。旧 live/apply 路径也经过同一门禁，并额外要求显式迁移，
+不能通过关闭新协议、旧 `configure --enabled on` 或 `run --force` 绕过。
+旧 running 但没有可信完成回执时返回 `UNKNOWN_EXTERNAL_OUTCOME`，不释放预留、不重派。
+配置、只读状态/历史、预览及有摘要校验的显式回滚继续可用。R05 Fake 仅允许临时合成夹具。
+本次没有修改实际项目的启用状态。下文多文件指南描述用于旧记录兼容；新 R04 仅应用
+`supervision/ACTIVE_GUIDE.md`，不自动修改 `AGENTS.md` 或 `prompts/continue.md`。
+
 监督由统一控制器调度，各项目使用同一套实现。科研代理负责研究和提交证据；独立监督进程读取当前项目证据、冻结合同及控制器源码，提出方法修正和下一轮任务。控制器先保存结构化裁决、证据映射、指南补丁与版本化短期指南，验证通过后才应用 `AGENTS.md` 和 `prompts/continue.md` 中的监督管理区，并登记审计记录。下一轮同时核验并加载已应用版本的 `guidance.md`。
 
 监督不能修改 `GOAL.md`、安全模型、证明义务、研究结论、`research/STATE.json` 或路线预算。`PAUSE` 和 `RECOMMEND_STOP` 会阻止控制器启动下一科研轮，但不会自行将科研状态改成 STOP、切换路线或重置预算。现有控制器仍负责路线复评与状态管理。自动校验能够确认修改范围、冻结文件摘要、主线锚点、已存在的目标义务、证据文件及版本一致性；数学正确性、新颖性和自然语言建议是否真正推进目标，仍需审查原始论证。
@@ -28,7 +36,7 @@ python research.py supervision configure all --enabled on
 
 v3.4 在已验收科研轮完成尝试登记后，先持锁刷新长期知识索引，再判断监督触发。科研提示词和监督请求都包含有长度上限的只读知识上下文；监督仍须核验原始证据。索引失败时保留该轮已验收结果和预算，在运行状态 `knowledge_index` 记录原因，返回 `KNOWLEDGE_INDEX_FAILED` 并停止本次后续监督。来源、历史追溯和恢复边界见 [长期科研知识图谱](RESEARCH_KNOWLEDGE_V3.4.md)。
 
-监督仅在真实 `run`/`watch` 或明确执行监督时调用独立 `codex exec`；查看状态和预览不会调用模型。机器需要有可用的 Codex 命令行和登录环境，桌面窗口无需一直打开。项目原有停止请求、人工审查门禁和研究预算仍然有效。
+当前真实 `run`/`watch` 到监督触发时，真实后端在预留/派发前停止；查看状态和预览也不调用模型。R05 离线临时夹具可演练排队、Fake 裁决和 ACTIVE_GUIDE 事务。项目原有停止请求、人工审查门禁和研究预算仍然有效。
 
 以下命令手动查看、触发及关闭监督：
 
@@ -43,7 +51,7 @@ python research.py supervision configure secagg-research --enabled off
 
 `history` 只读列出成功、失败及回滚记录、执行次数与时长；`show` 默认查看当前有效版本，没有有效版本时查看最近记录，也可以用 `--id` 指定历史审查。输出包含结构化裁决、证据映射和本地审计文件路径，便于在桌面版直接打开。没有历史时返回空列表或 `no_reviews`，不会创建运行目录。
 
-`--force` 表示明确审查当前快照，仍然遵守冻结合同、独立预算和幂等约束。`run`、`show` 和 `rollback` 必须指定一个项目，`all` 只支持 `status`、`history` 和 `configure`。
+`--force` 只表达审查请求，不绕过真实后端门禁或旧 live 退役。`run`、`show` 和 `rollback` 必须指定一个项目，`all` 只支持 `status`、`history` 和 `configure`。
 
 ## 结构化裁决与提案校验
 
@@ -119,9 +127,9 @@ projects/<项目>/research/supervision/<review_id>/
 <!-- SUPERVISION:END -->
 ```
 
-已有项目无需迁移：首次成功应用时，控制器在原有文件后追加管理区，保留原始指南全文。新项目从 `templates/project` 自动继承管理区及同一监督接口；创建后使用 `supervision configure <项目> --enabled on` 开启。
+这些管理区属于旧格式兼容，保留历史和显式回滚，不再自动追加或开放旧 apply。新项目继承通用模板和 R01—R05 机制；当前新指南只有 ACTIVE_GUIDE 受控文件，AGENTS/continue 的长期更改仍须显式操作。真实监督需要将来认证隔离及显式迁移，不以旧 configure 自动开启。
 
-监督进程以控制器根目录为工作区，在只读 Codex 会话中提出结构化提案，可读取控制器代码与当前项目证据；它不能直接写项目，实际指南由控制器持锁更新。冻结目标、证据或指南版本在审查期间变化时，提案不能直接应用。文件应用失败时恢复原字节，审查记录和失败原因保留；研究状态与路线预算不由监督修改。重复或损坏的管理区也会被拒绝。
+旧进程曾以根目录及 read-only 参数运行，但这不能证明其他项目、凭据和网络隔离，故该路径已退役。新提案绑定冻结快照、来源和版本；R04 模拟应用在失败时只恢复本事务 afterimage，人工第三版本保留并报冲突。研究状态与路线预算不由监督修改。
 
 查看 `supervision status <项目>` 获取最近记录及 `review_id`，然后回滚最新已应用版本：
 
@@ -131,7 +139,7 @@ python research.py supervision rollback secagg-research --id REVIEW_ID
 
 回滚保留审计历史，不删除研究证据、不恢复旧科研状态，也不返还已消耗的预算。连续回滚会恢复上一版本的监督上下文。若指南已经被人工修改，或归档的原版本遭到篡改，版本校验会阻止覆盖，需要先查看差异并处理冲突。关闭监督也必须先恢复未完成的写入事务，不能让下一轮读取半应用的指南。
 
-实现使用 `codex exec --sandbox read-only`、结构化输出 schema 和独立临时会话；具体 CLI 选项参见 [OpenAI 官方非交互执行文档](https://developers.openai.com/codex/noninteractive/) 和 [CLI 参考](https://developers.openai.com/codex/cli/reference/)。
+历史实现使用过 `codex exec --sandbox read-only`，参数本身不代表已认证隔离。当前真实执行固定阻断，结构化 schema/Fake 验收也不构成认证。后续真实隔离须单独验收，不能由配置自行声称通过。
 
 ## 本地验证
 

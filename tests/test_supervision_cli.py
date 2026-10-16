@@ -121,7 +121,9 @@ class SupervisionInterfaceTests(unittest.TestCase):
                                   "reason": "This accepted record names the unresolved core security obligation."}],
                     "agents_guidance": "", "method_change_reason": ""}
 
-        with patch.object(supervision, "_execute", side_effect=propose) as execute:
+        # Synthetic legacy archive fixture only; real live/apply is retired.
+        with patch.object(supervision, "_require_legacy_backend"), \
+             patch.object(supervision, "_execute", side_effect=propose) as execute:
             result = supervision.maybe_supervise(self.root, self.project, ledger, force=True)
             execute.assert_called_once()
         self.assertEqual(result["status"], "applied", result)

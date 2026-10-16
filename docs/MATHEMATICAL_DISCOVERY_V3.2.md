@@ -103,7 +103,7 @@ research/attempts/attempt-0001/CHECKPOINT.json 由本轮模型提交，必须保
 | 核查接口 | 有效边界 |
 | --- | --- |
 | verify counterexample | 只支持注册的准确整数谓词；不执行 Python eval，不是任意协议安全分析器 |
-| verify lean | 本地 Lean 检查、公理和目标声明输出；还需独立声明对应与公理范围审查 |
+| verify lean | 未认证隔离时返回 ISOLATION_UNCERTIFIED，不启动 Lean/Lake；无 elan 返回 UNAVAILABLE |
 | claim review proof_and_statement | 用户登记独立技术审查，绑定当前声明、前提和证据；结构检查不验证审查人的判断 |
 | claim review novelty | 定理级新颖性审查，复用六维原文技术比较与独立推导 |
 
@@ -119,7 +119,7 @@ research/attempts/attempt-0001/CHECKPOINT.json 由本轮模型提交，必须保
 
 可用 --witness 提供变量到整数的 JSON 映射。验证器按顺序核对前提，再检查结论；找到的准确见证只否定注册的机器谓词，人工数学声明的对应仍需审查。没有反例仅表示有限范围未找到，绝不关闭全称证明义务。默认每次最多10,000个候选、3秒。
 
-候选声明含机器谓词或 formal_target 时，控制器在接受研究轮后自动执行相应有界核查。结果记录在尝试账本和主张图，不产生自动正确性或新颖性审批。
+候选声明含机器谓词时，控制器在接受研究轮后执行受限整数核查。formal_target 经过统一隔离门禁，当前不启动宿主 Lean/Lake。结果不产生自动正确性或新颖性审批。
 
 ## 6. Lean 环境及范围审核
 
@@ -130,7 +130,7 @@ Lean 是可选安装的外部证明工具。框架的 Python 部分不需要第�
 .\research.cmd claim show my-project --id CLAIM-001
 ```
 
-控制器通过 elan run 固定版本调用 lake env lean，不带 --install，不执行 lake update/cache get/build。缺少工具、工具链或依赖时保留 UNAVAILABLE/FAILED；不自动下载。检查会绑定源码、编译库、工具链及目标声明，保存完整日志并打印目标公理和类型。明显的 sorry/admit/sorryAx 会阻止检查成功；静态标记扫描可能保守拒绝注释中的同名词。
+当前没有认证的 OS 隔离后端，因此自动候选核查和显式 `verify lean` 都在任何进程启动前返回 `ISOLATION_UNCERTIFIED`。不探测 Lean 版本、不复制审计源码、不继承宿主凭据执行候选，不运行 elan/Lake/Lean 或安装命令。输入路径、固定工程和未完成证明标记仍检查；静态扫描不构成隔离保证。
 
 工具成功状态为 TOOL_PASSED_AUDIT_PENDING。独立审查者仍须核对完整日志、精确量词、前提、定义、导入、自定义公理及主/辅结论覆盖范围。将研究模板 FORMAL_AUDIT_TEMPLATE.json 中 verdict 改为 MATCHED_AND_AUDITED，填入 claim show 输出的 formal_receipt_sha256，并填写实际审核结论后：
 
@@ -138,7 +138,7 @@ Lean 是可选安装的外部证明工具。框架的 Python 部分不需要第�
 .\research.cmd claim review my-project --id CLAIM-001 --kind formal_audit --evidence research/formal-audit.json --reviewer "独立审查者" --reason "已核对声明、依赖与公理"
 ```
 
-当前实现没有自动 Comparator 集成，也没有操作系统级 Lean 沙箱。Lean/Lake 是在本地运行的程序；形式声明对应与信任范围不能仅靠退出码判断。本版本交付时未在真实 Lean 工具链上运行数学证明。
+当前没有自动 Comparator 集成或 OS 级 Lean 沙箱，故宿主执行保持阻断。已有合法工具回执及独立审查规则保留；模拟成功回执的单元测试不证明真实隔离或形式证明已经通过。
 
 采用人工独立审查时：
 

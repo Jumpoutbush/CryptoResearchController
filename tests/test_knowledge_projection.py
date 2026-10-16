@@ -265,7 +265,8 @@ class KnowledgeProjectionTests(unittest.TestCase):
             'evidence':{'research/review-novelty.md':'0'*64}}
         configuration.atomic_json(path,data)
         actual = claim_graph.status(self.project)['claims'][0]
-        self.assertEqual(actual['proof_status'],'INDEPENDENTLY_REVIEWED')
+        self.assertEqual(actual['proof_status'],'PENDING_REVALIDATION')
+        self.assertIn('RECEIPT_HISTORY_INVALID',actual['invalidation_reasons'])
         self.assertEqual(actual['novelty_status'],'PENDING')
         graph = self.api().derive(self.root,self.project)
         edge = next(e for e in graph['edges'] if e.get('review_kind')=='novelty')

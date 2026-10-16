@@ -304,6 +304,25 @@ def command_budget(args):
     updates = {"initial_round_budget": args.set, "stagnation_rounds": args.stagnation,
                "extension_round_budget": args.extension, "max_extensions": args.max_extensions}
     updates = {k: v for k, v in updates.items() if v is not None}
+    registration = getattr(args, 'register_baseline', None)
+    restoration = getattr(args, 'restore_ledger', None)
+    recovery = getattr(args, 'recover_ledger', False)
+    if registration or restoration or recovery:
+        if args.clear or updates:
+            raise ValueError('预算权威登记/恢复不能同时修改预算策略。')
+        reason = getattr(args, 'reason', None)
+        if not reason or len(reason.strip()) < 12:
+            raise ValueError('预算权威登记/恢复需 --reason 明确说明，至少 12 个字符。')
+        from route_budget import register_baseline, restore_registered_ledger, recover_ledger
+        with project_lock(project):
+            if registration:
+                result = register_baseline(ROOT, project, load_json(Path(registration)), reason)
+            elif restoration:
+                result = restore_registered_ledger(ROOT, project, Path(restoration), reason)
+            else:
+                result = recover_ledger(ROOT / 'state/routes' / (project_key(project) + '.json'), reason)
+            print_json({'project': project_id(project), 'route_authority': result})
+        return 0
     if args.clear and updates:
         raise ValueError("--clear 与预算更新参数不能同时使用。")
     if args.clear or updates:
@@ -766,7 +785,7 @@ def command_refocus(args):
     import runner_core
     from engine.discovery_scheduler import active
     from research_focus import make_focus
-    from route_budget import load_ledger, save_ledger, total_budget
+    from route_budget import load_ledger, save_ledger, total_budget, registry_path
     project = resolve_project(args.project)
     if len(args.task.strip()) < 24 or len(args.reason.strip()) < 12:
         raise ValueError('refocus 需要具体任务（至少 24 字符）及恢复原因（至少 12 字符）。')
@@ -804,8 +823,12 @@ def command_refocus(args):
         path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='refocus-', dir=path.parent) as temp:
             backup = Path(temp) / 'ledger.json'
+            witness = registry_path(path)
+            witness_backup = Path(temp) / 'registration.json'
             if path.is_file():
                 shutil.copy2(path, backup)
+            if witness.is_file():
+                shutil.copy2(witness, witness_backup)
             try:
                 atomic_json(project / 'research/STATE.json', state)
                 append_decision(project, '用户将任务重新聚焦核心问题',
@@ -819,6 +842,10 @@ def command_refocus(args):
                     os.replace(backup, path)
                 else:
                     path.unlink(missing_ok=True)
+                if witness_backup.is_file():
+                    os.replace(witness_backup, witness)
+                else:
+                    witness.unlink(missing_ok=True)
                 raise
     print('PROJECT_REFOCUSED:', project_id(project))
     print('ROUTE_USED:', epoch['effective_rounds'], 'BUDGET:', budget)
@@ -946,6 +973,11 @@ def parser():
     c = command("budget", command_budget, "查看或保存项目路线预算")
     add_project(c); c.add_argument("--set", type=int); c.add_argument("--stagnation", type=int)
     c.add_argument("--extension", type=int); c.add_argument("--max-extensions", type=int); c.add_argument("--clear", action="store_true")
+    authority = c.add_mutually_exclusive_group()
+    authority.add_argument('--register-baseline', metavar='FILE', help='显式登记完整历史预算账本；不会推断零消费')
+    authority.add_argument('--restore-ledger', metavar='FILE', help='仅恢复SHA与最新独立预算见证完全一致的备份')
+    authority.add_argument('--recover-ledger', action='store_true', help='恢复已有本地预备afterimage；不执行科研')
+    c.add_argument('--reason', help='预算权威登记或恢复的人工依据')
     c = command("config", command_config, "查看或保存项目模型参数")
     add_project(c)
     for name in ("model", "critical-model"):

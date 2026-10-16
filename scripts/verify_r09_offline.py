@@ -112,6 +112,9 @@ def main():
         assert frozen_prompt==fingerprint([project,root/'state/discovery'],root)
 
         pdf=project/'literature/pdfs/toy-v1.pdf'; original=pdf.read_bytes(); pdf.write_bytes(original+b'\nchanged original')
+        # Persist the new canonical observation explicitly; projection build
+        # remains a reader of scientific authority under the R06 contract.
+        invoke(['claim','refresh','example'])
         two=invoke(['knowledge','build','example'])['knowledge']
         fault=invoke(['knowledge','explain','example','--claim','C'])['knowledge']
         assert fault['claim']['proof_status']=='PENDING_REVALIDATION'

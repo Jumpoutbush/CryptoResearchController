@@ -45,7 +45,10 @@ class KnowledgePromptIntegrationTests(unittest.TestCase):
             observed['prompt'] = prompt
             return self.proposal(controller, project, review_dir, prompt, policy)
 
-        with mock.patch.object(supervision, '_execute', side_effect=execute) as child:
+        # Only inspect the synthetic legacy request/transaction; no real backend
+        # is enabled and this guard mock is not an isolation certification.
+        with mock.patch.object(supervision, '_require_legacy_backend'), \
+             mock.patch.object(supervision, '_execute', side_effect=execute) as child:
             result = supervision.maybe_supervise(self.root, self.project, self.ledger, force=True)
         self.assertTrue(result['proceed'], result)
         child.assert_called_once()

@@ -18,12 +18,12 @@ cd D:\CryptoResearchController
 - [框架设计](docs/ARCHITECTURE.md)：统一内容、研究闭环、模板扩展和此次修复。
 - [整合与验证记录](docs/INTEGRATION_REPORT.md)：清理、证据保留、检查结果及验证范围。
 - [主线偏移修复与恢复](docs/MAINLINE_FOCUS.md)：区分路线复评和证明审查，约束旁支预算，并用 `refocus` 显式恢复核心任务。
-- [独立科研监督](docs/SUPERVISION.md)：每三轮已验收科研工作及预算复评节点自动审查，安全更新指南，保留独立预算、审计差异和回滚记录。用 `research.cmd supervision configure all --enabled on` 登记现有项目并开启。
+- [独立科研监督](docs/SUPERVISION.md)：复用 R02—R05 事件、预算和指南事务。真实 Codex 隔离尚未认证，所有新旧真实入口均阻断；旧 configure 不再开放执行。Fake 仅限临时夹具。
 
 按分轮路线图新增的 [R02 事件与恢复协议](docs/SUPERVISION_R02_EVENTS.md) 默认关闭，
-开启后仅排队。本地恢复守护只保证稳定事件去重、本地至多一次记账和不自动重复派发；
+R03—R05 已实现离线消费者和受控指南应用，真实后端仍阻断。本地恢复守护保证稳定事件去重、本地至多一次记账和不自动重复派发；
 外部请求已派发但缺少可靠回执时为 `UNKNOWN_EXTERNAL_OUTCOME`，保留预留并等待人工审计。
-没有提供方可验证幂等键时，不能保证远端账单恰好一次。本轮没有实现 R03 付费执行器。
+没有提供方可验证幂等键时，不能保证远端账单恰好一次。
 - [v3.3 发布与后续路线](docs/RELEASE_V3.3.md)：结构化裁决、指南提案、已知偏移样本回放及 v3.4—v4.0 的分阶段开发边界。
 - [v3.4 长期科研知识图谱](docs/RESEARCH_KNOWLEDGE_V3.4.md)：复用现有主张图，关联论文、定理、原始证据、失败路线与证明义务，查询来源及上游失效影响。
 

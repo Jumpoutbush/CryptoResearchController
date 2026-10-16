@@ -57,12 +57,20 @@ discards the damaged log. Save it for review/recovery. Hash chains detect incons
 local history, but cannot prevent a filesystem owner deleting or rewriting all of it;
 there is no claimed external timestamp or remote append-only anchor.
 
-Compatibility detail: byte-for-byte source restoration can restore an unchanged old
-review under the original authority. R08 does not invent a sticky veto. A formal
-`claim import` revision clears its review receipts and leaves downstream pins stale;
-or an original `claim invalidate` explicitly withdraws it. In those cases restoring
-files/rebuilding indexes cannot reapprove anything: explicit rebind and fresh reviews
-must pass the existing gates. This is the recovery scenario used by acceptance.
+The user confirmed the original R08 revalidation rule on 2026-10-16. Explicit
+`claim refresh <project>` persists observed losses in canonical per-scope revocation
+latches and operation events. Restoring exact old bytes after that observation does
+not restore approval. Each affected scope requires a new independent review;
+upstream dependencies must become valid before downstream approval can recover.
+Formal revision/withdrawal still requires the existing explicit rebind/review path.
+
+Read-only status/context/explain and projection derive never persist observations.
+Ordinary build/cache-only also never writes scientific authority: an unrecorded loss
+of a positive receipt stops the build before index/history writes and requests
+explicit claim refresh. Empty graphs and unreviewed candidates remain buildable.
+A transient read without a durable observation cannot remember a past filesystem
+change; it is not a recorded revocation. The canonical latch is authority, never
+the disposable cache or a reconstruction from missing review history.
 
 OpenSource design reference: [ARA fixed commit](https://github.com/ARA-Labs/Agent-Native-Research-Artifact/tree/e52a925e9d03b4ada3008653e72f99b04116fca2),
 MIT, Copyright 2026 Orchestra Research. LICENSE SHA-256

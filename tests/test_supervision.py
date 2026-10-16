@@ -105,7 +105,10 @@ class SupervisionTests(unittest.TestCase):
             'agents_guidance': 'Prioritize core obligations; supporting lemmas require an explicit dependency on the frozen goal.'}
 
     def supervise(self, proposal=None, **options):
-        with mock.patch.object(supervision, '_execute', side_effect=proposal or self.proposal) as execute:
+        # Synthetic local validation/transaction coverage only. Production legacy
+        # live/apply remains retired; F01 tests exercise its unmodified gate.
+        with mock.patch.object(supervision, '_require_legacy_backend'), \
+             mock.patch.object(supervision, '_execute', side_effect=proposal or self.proposal) as execute:
             result = supervision.maybe_supervise(self.root, self.project, self.ledger, **options)
         return result, execute
 
@@ -440,7 +443,7 @@ class SupervisionTests(unittest.TestCase):
         self.assert_unchanged(original)
         self.assertEqual(guides, {key: (self.project / key).read_bytes() for key in guides})
 
-    def test_read_only_supervisor_process_is_isolated_and_receives_no_api_keys(self):
+    def test_legacy_read_only_flags_cannot_certify_process_isolation(self):
         directory = self.root / 'state/mock review with spaces'
         directory.mkdir(parents=True)
         policy = supervision.policy_for(self.root, self.project)
@@ -452,28 +455,23 @@ class SupervisionTests(unittest.TestCase):
             return process
         secrets = {'OPENAI_API_KEY': 'do-not-pass', 'CODEX_API_KEY': 'do-not-pass', 'CODEX_ACCESS_TOKEN': 'do-not-pass'}
         with mock.patch.object(supervision.shutil, 'which', return_value='C:/CLI Space/codex.exe'), \
-             mock.patch.object(supervision.subprocess, 'Popen', side_effect=launch), mock.patch.dict('os.environ', secrets):
-            result = supervision._execute(self.root, self.project, directory, 'Independent supervisor prompt', policy)
-        self.assertEqual(result, {'schema_version': 2, 'simulated': True})
-        command = observed['command']
-        self.assertEqual(command[command.index('--sandbox') + 1], 'read-only')
-        self.assertEqual(command[command.index('--cd') + 1], str(self.root.resolve()))
-        self.assertIn('--output-schema', command)
-        self.assertIn('--output-last-message', command)
-        self.assertIn('apps', command)
-        self.assertIn('web_search="disabled"', command)
-        self.assertIn('mcp_servers={}', command)
-        self.assertNotIn('--dangerously-bypass-approvals-and-sandbox', command)
-        self.assertTrue(set(secrets).isdisjoint(observed['kwargs']['env']))
-        self.assertFalse(observed['kwargs'].get('shell', False))
-        process.communicate.assert_called_once_with(input='Independent supervisor prompt', timeout=policy['max_seconds'])
+             mock.patch.object(supervision.subprocess, 'Popen', side_effect=launch) as popen, \
+             mock.patch.dict('os.environ', secrets), \
+             self.assertRaisesRegex(ValueError, 'BLOCKED_UNVERIFIED_OS_SANDBOX'):
+            supervision._execute(self.root, self.project, directory, 'Independent supervisor prompt', policy)
+        popen.assert_not_called()
+        process.communicate.assert_not_called()
+        self.assertEqual(observed, {})
 
     def test_supervisor_timeout_terminates_process_tree(self):
         directory = self.root / 'state/timeout supervisor'
         directory.mkdir(parents=True)
         process = mock.Mock()
         process.communicate.side_effect = TimeoutError('Simulated timeout')
-        with mock.patch.object(supervision.shutil, 'which', return_value='fake-codex'), \
+        # The retired transport is exercised with a mock process only; this
+        # does not assert that a real legacy OS sandbox has been certified.
+        with mock.patch.object(supervision, '_require_legacy_backend'), \
+             mock.patch.object(supervision.shutil, 'which', return_value='fake-codex'), \
              mock.patch.object(supervision.subprocess, 'Popen', return_value=process), \
              mock.patch.object(runner_core, 'kill_process_tree') as kill:
             with self.assertRaises(TimeoutError):

@@ -13,18 +13,11 @@ from . import build as projection
 
 def validate_dependency_bindings(project,graph=None):
     """Fail closed for retrieval without repairing or rewriting scientific authority."""
-    from engine.claim_graph import load
+    from engine.claim_graph import load,dependency_bindings_valid
     data=load(project) if graph is None else _pinned_json(project,projection.CLAIMS,'PROJECT',graph['source_manifest'],{'claims':[]})
     for current in data['claims']:
         for item in [*current.get('history',[]),current]:
-            pins=item.get('dependency_pins'); declared=item['spec']['dependencies']
-            valid=isinstance(pins,dict) and set(pins)==set(declared)
-            if valid:
-                valid=all(isinstance(pin,dict) and set(pin)=={'revision','spec_sha256'}
-                    and type(pin['revision']) is int and pin['revision']>0
-                    and isinstance(pin['spec_sha256'],str) and re.fullmatch('[0-9a-f]{64}',pin['spec_sha256'])
-                    for pin in pins.values())
-            if not valid: raise ValueError('CLAIM_DEPENDENCY_BINDING_INVALID:'+item['id']+':'+str(item['revision']))
+            if not dependency_bindings_valid(item): raise ValueError('CLAIM_DEPENDENCY_BINDING_INVALID:'+item['id']+':'+str(item['revision']))
 
 
 def _pinned_json(root,path,scope,manifest,default):

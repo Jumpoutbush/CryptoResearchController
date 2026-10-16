@@ -87,15 +87,15 @@ class SupervisionTriggerRunnerTests(unittest.TestCase):
             self.assertEqual(runner.main(['--project', str(self.project), '--rounds', '1', '--offline', '--no-fetch']), 0)
         self.assert_one()
 
-    def test_queue_precedes_derived_index_failure_after_acceptance(self):
-        def fail_index(project):
+    def test_derived_index_failure_cannot_freeze_or_consume_a_queue_event(self):
+        def fail_index(project, **kwargs):
             self.assertEqual(self.current()['last_run'], 'r3')
-            self.assertEqual(len(scheduler.pending(self.root, self.project)['events']), 1)
+            self.assertEqual(len(scheduler.pending(self.root, self.project)['events']), 0)
             return {'status': 'failed', 'error': 'Offline index failure'}
         with mock.patch.object(runner, 'run_child', side_effect=self.child), \
              mock.patch.object(runner, 'refresh_knowledge', side_effect=fail_index):
             self.assertEqual(self.advance(), (3, 'KNOWLEDGE_INDEX_FAILED'))
-        self.assert_one()
+        self.assertEqual(scheduler.pending(self.root, self.project)['events'], [])
         self.assertTrue(route_budget.read_json(self.root / 'logs/subject/latest-status.json')['wrapper_accepted'])
         self.assertFalse((self.root / 'state/failed_runs').exists())
 

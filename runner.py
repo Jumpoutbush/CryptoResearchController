@@ -373,20 +373,145 @@ def queue_supervision_after_accept(project, ledger, epoch, policy, run_id, *, re
         return {'status': 'failed', 'proceed': False, 'error': str(exc)}
 
 
-def refresh_knowledge(project: Path) -> dict:
+def refresh_knowledge(project: Path, *, execution_lock_held=False) -> dict:
     """Materialise accepted sources under the execution lock, without a model."""
     try:
         from engine.knowledge_graph import refresh
-        with file_lock(HERE / 'locks' / (project_key(project) + '.lock')):
+        from contextlib import nullcontext
+        with (nullcontext() if execution_lock_held else file_lock(HERE / 'locks' / (project_key(project) + '.lock'))):
             return {'status': 'refreshed', **refresh(project)}
     except Exception as exc:
         print('KNOWLEDGE_INDEX_ERROR:', str(exc), file=sys.stderr, flush=True)
         return {'status': 'failed', 'error': str(exc)}
 
 
+def continue_accepted(project, policy, journal):
+    """Roll forward a committed run; never call the research model here."""
+    import research_acceptance as acceptance
+    from engine import discovery_scheduler as discovery
+    owner=journal.get('discovery_owner_attempt_id')
+    if owner is not None and journal.get('step_active')=='discovery':
+        try:
+            observation=discovery.settlement_observation(project,owner,journal['run_id'])
+        except ValueError:
+            # An unknown check has no trusted afterimage. The step below will
+            # stop rather than repeat it; unrelated project edits still fail CAS.
+            observation=None
+        if observation is not None:
+            if (journal['expected_manifest'] not in (observation['project_before_checks'],observation['project_after_checks'])
+                    or acceptance.manifest(project)!=observation['project_after_checks']):
+                raise ValueError('ACCEPTANCE_PROJECT_CHANGED: completed local check afterimage mismatch')
+            journal['expected_manifest']=observation['project_after_checks']
+            acceptance.write(HERE,project,journal)
+    acceptance.verify_project(project, journal)
+    ledger_path = HERE / journal['route_path']
+    def route_commit():
+        from route_budget import recover_ledger
+        recover_ledger(ledger_path)
+        current = read_json(ledger_path) if ledger_path.exists() else None
+        if current not in (journal['route_before'], journal['route_after']):
+            raise ValueError('ACCEPTANCE_ROUTE_CHANGED: retain both authorities; no new research')
+        if current != journal['route_after']:
+            save_ledger(ledger_path, journal['route_after'])
+        return {'run_id': journal['run_id'], 'ledger_sha256': acceptance.digest(read_json(ledger_path))}
+    acceptance.step(HERE, project, journal, 'route', route_commit)
+    acceptance.fault_hook('ROUTE_SAVED')
+    ledger = read_json(ledger_path)
+    epoch = ledger['epochs'][-1]
+    if not journal.get('route_output_done'):
+        if journal['reviewed']:
+            print('ROUTE_DECISION:', journal['outcome'])
+        else:
+            print('ROUTE_PROGRESS:', journal.get('progress_kind'), 'SUBSTANTIVE_SIGNAL:', journal.get('progress'),
+                  'EFFECTIVE_ROUNDS:', epoch['effective_rounds'], 'STAGNATION:', epoch['stagnation'])
+        journal['route_output_done'] = True
+        acceptance.write(HERE, project, journal)
+    if journal['initialization']:
+        acceptance.step(HERE, project, journal, 'initialization',
+            lambda: __import__('engine.initialization', fromlist=['finalize']).finalize(project, journal['run_id']))
+    acceptance.fault_hook('BEFORE_DISCOVERY')
+    def discovery_commit():
+        from engine.common import ledger as discovery_ledger
+        if owner is not None:
+            matches=[c for a in discovery_ledger(project)['attempts'] if a['id']==owner
+                     for c in a['calls'] if c['run_id']==journal['run_id']]
+            if len(matches)!=1: raise ValueError('DISCOVERY_OWNER_MISSING: '+journal['run_id'])
+            if matches[0]['status']=='PENDING_WRAPPER' and matches[0]!=journal['discovery_call_before']:
+                raise ValueError('DISCOVERY_CALL_CHANGED: '+journal['run_id'])
+        discovery.finalize_wrapper(project, True, journal['run_id'],
+            **({'expected_attempt_id':owner} if owner is not None else {}))
+        if owner is None: return None
+        matches=[c for a in discovery_ledger(project)['attempts'] if a['id']==owner
+                 for c in a['calls'] if c['run_id']==journal['run_id']]
+        if len(matches)!=1 or matches[0]['status']!='ACCEPTED': raise ValueError('DISCOVERY_OWNER_NOT_SETTLED')
+        return {'attempt_id':owner,'run_id':journal['run_id'],'call_sha256':acceptance.digest(matches[0])}
+    acceptance.step(HERE, project, journal, 'discovery',
+                    discovery_commit)
+    if owner is not None:
+        from engine.common import ledger as discovery_ledger
+        matches=[c for a in discovery_ledger(project)['attempts'] if a['id']==owner
+                 for c in a['calls'] if c['run_id']==journal['run_id']]
+        settled=journal['steps']['discovery']
+        if len(matches)!=1 or acceptance.digest(matches[0])!=settled['call_sha256']:
+            raise ValueError('DISCOVERY_SETTLED_OWNER_CHANGED')
+    knowledge = journal['steps'].get('knowledge')
+    if knowledge is None:
+        failed_knowledge = None
+        def maintain():
+            nonlocal failed_knowledge
+            result = refresh_knowledge(project, execution_lock_held=True)
+            if result['status'] == 'failed':
+                # No completion receipt: do not freeze or queue a failed index.
+                failed_knowledge = result
+                raise RuntimeError('KNOWLEDGE_INDEX_FAILED: ' + result.get('error', 'unknown'))
+            return result
+        try:
+            knowledge = acceptance.step(HERE, project, journal, 'knowledge', maintain)
+        except RuntimeError as exc:
+            if not str(exc).startswith('KNOWLEDGE_INDEX_FAILED:'): raise
+            finish_status(project, accepted=True, outcome=journal['outcome'], run_id=journal['run_id'],
+                          knowledge_result=failed_knowledge)
+            return 3, 'KNOWLEDGE_INDEX_FAILED'
+    queued = acceptance.step(HERE, project, journal, 'queue',
+        lambda: queue_supervision_after_accept(project, ledger, epoch, policy, journal['run_id'], reviewed=journal['reviewed']))
+    if queued['status'] == 'failed':
+        # Failed attempts are not completed queue steps and can be retried safely
+        # by the R02 idempotent event API after its own recovery.
+        journal['steps'].pop('queue', None)
+        acceptance.write(HERE, project, journal)
+        finish_status(project, accepted=True, outcome=journal['outcome'], run_id=journal['run_id'], supervision_result=queued)
+        return 3, 'SUPERVISION_QUEUE_FAILED'
+    supervised = supervise_safely(project, ledger, epoch, policy)
+    finish_status(project, accepted=True, outcome=journal['outcome'], run_id=journal['run_id'],
+                  supervision_result=supervised, knowledge_result=knowledge)
+    acceptance.finish(HERE, project, journal)
+    if not supervised.get('proceed', True): return 3, 'SUPERVISION_' + supervised['status'].upper()
+    return 0, journal['outcome']
+
+
+def recover_acceptance(project, policy):
+    import research_acceptance as acceptance
+    journal = acceptance.load(HERE, project)
+    if not journal or journal['phase'] == 'ABORTED': return None
+    if journal['phase'] == 'COMPLETE':
+        acceptance.archive_complete(HERE, project, journal)
+        return None
+    # An old core may still own this lock after its wrapper died. In that case
+    # recovery must stop before inspecting/restoring any mutable project files.
+    with file_lock(HERE / 'locks' / (project_key(project) + '.lock')):
+        journal = acceptance.load(HERE, project)
+        if journal['phase'] == 'STARTED':
+            raise ValueError('RESEARCH_OUTCOME_UNKNOWN: retained precommit snapshot; audit the original run, no automatic retry')
+        result = continue_accepted(project, policy, journal)
+        return (0, 'RECOVERED_ACCEPTED_ROUND') if result[0] == 0 else result
+
+
 def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
                 epoch: dict, core_cmd: list[str]) -> tuple[int, str]:
     from runner_core import ProjectTransaction
+    import research_acceptance as acceptance
+    recovered = recover_acceptance(project, policy)
+    if recovered is not None: return recovered
     if (project / '.control/STOP_REQUESTED').exists():
         return 0, 'SKIPPED_BY_STOP_REQUEST'
     before = state_read(project)
@@ -420,16 +545,29 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
     if before['phase'] in SYSTEM_PHASES and not reviewing and '--audit' not in core_cmd:
         require_system_ready(project)
     before_hashes = evidence_snapshot(project)
-    transaction = ProjectTransaction(project).capture()
+    # Persist the original authority before dispatch, including its registration
+    # witness. A later accepted afterimage always retains this same identity.
+    save_ledger(ledger_path, ledger)
+    ledger_before = copy.deepcopy(ledger)
+    epoch_before = copy.deepcopy(epoch)
+    with file_lock(HERE / 'locks' / (project_key(project) + '.lock')):
+        if state_read(project) != before:
+            raise ValueError('RESEARCH_STATE_CHANGED_BEFORE_DISPATCH: no snapshot or rollback over another core')
+        transaction = ProjectTransaction(project).capture()
+        journal = acceptance.begin(HERE, project, transaction, ledger_path, ledger)
     accepted = False
     archive = None
     outcome = 'NATIVE_CORE_FAILED'
     pause_reason = None
     preflight = copy.deepcopy(before)
+    execution_guard = None
     try:
         preflight['next_task'] = generate_directive(
             selected_route(before), epoch, policy, reviewing, epoch['review_reason'], before['next_task'])
-        atom_json(state_path(project), preflight)
+        with file_lock(HERE / 'locks' / (project_key(project) + '.lock')):
+            if state_read(project) != before:
+                raise ValueError('RESEARCH_STATE_CHANGED_BEFORE_DISPATCH')
+            atom_json(state_path(project), preflight)
         print('MODE:', 'ROUTE_REVIEW' if reviewing else 'RESEARCH', 'ROUTE:', epoch['route'],
               'USED:', epoch['effective_rounds'], 'BUDGET:', total_budget(epoch, policy), flush=True)
         command = list(core_cmd)
@@ -440,6 +578,11 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         if code:
             outcome = f'NATIVE_CORE_FAILED exit_code={code}'
             return code, outcome
+        # Validate and decide while excluding a directly invoked core as well
+        # as other wrappers. No project afterimage may change in this interval.
+        candidate_guard = file_lock(HERE / 'locks' / (project_key(project) + '.lock'))
+        candidate_guard.__enter__()
+        execution_guard = candidate_guard
         okay, after, detail = core_completed(project, before)
         if not okay:
             outcome = 'CORE_SUCCESS_WITHOUT_ACCEPTED_RESEARCH: ' + detail
@@ -467,47 +610,36 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
             __import__('engine.initialization', fromlist=['validate']).validate(project, after['last_run'])
         if reviewing:
             outcome = apply_review(project, ledger, epoch, policy, after)
-            save_ledger(ledger_path, ledger)
-            print('ROUTE_DECISION:', outcome)
         else:
             progress, kind = record_round(project, ledger, epoch, policy, after, before_hashes)
-            save_ledger(ledger_path, ledger)
-            print('ROUTE_PROGRESS:', kind, 'SUBSTANTIVE_SIGNAL:', progress,
-                  'EFFECTIVE_ROUNDS:', epoch['effective_rounds'], 'STAGNATION:', epoch['stagnation'])
-            if needs_review(epoch, policy): print('ROUTE_REVIEW_PENDING:', needs_review(epoch, policy))
+            journal.update(progress=progress, progress_kind=kind)
             outcome = 'COUNTED_RESEARCH_ROUND'
+        if len(ledger['events']) > 3000: ledger['events'] = ledger['events'][-3000:]
+        acceptance.commit(HERE, project, journal, ledger, after['last_run'], outcome,
+                          initialization=bool(before.get('initialization_required')), reviewed=reviewing)
         transaction.accept()
         accepted = True
-        if before.get('initialization_required'):
-            __import__('engine.initialization', fromlist=['finalize']).finalize(project, after['last_run'])
-        discovery.finalize_wrapper(project, True, after['last_run'])
-        # The legacy memory refresh can revise CLAIM_GRAPH metadata. Freeze the
-        # opt-in event after that existing post-accept maintenance, not before it.
-        from supervision_runtime import active
-        knowledge = refresh_knowledge(project) if active(HERE, project) else None
-        queued = queue_supervision_after_accept(project, ledger, epoch, policy, after['last_run'], reviewed=reviewing)
-        if queued['status'] == 'failed':
-            finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], supervision_result=queued)
-            return 3, 'SUPERVISION_QUEUE_FAILED'
-        if knowledge is None: knowledge = refresh_knowledge(project)
-        if knowledge['status'] == 'failed':
-            finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], knowledge_result=knowledge)
-            return 3, 'KNOWLEDGE_INDEX_FAILED'
-        supervised = supervise_safely(project, ledger, epoch, policy)
-        finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'],
-                      supervision_result=supervised, knowledge_result=knowledge)
-        if not supervised.get('proceed', True):
-            return 3, 'SUPERVISION_' + supervised['status'].upper()
-        return 0, outcome
+        return continue_accepted(project, policy, journal)
     except KeyboardInterrupt:
         outcome = 'INTERRUPTED'
         raise
     finally:
-        if not accepted:
-            archive = transaction.rollback(outcome)
-            if pause_reason: decision_pause(project, {}, pause_reason)
-            finish_status(project, accepted=False, outcome=outcome, archive=archive)
-            discovery.finalize_wrapper(project, False)
+        try:
+            if not accepted and acceptance.committed(HERE, project, transaction.label):
+                transaction.accept()
+                accepted = True
+            if not accepted:
+                from contextlib import nullcontext
+                with (nullcontext() if execution_guard else file_lock(HERE / 'locks' / (project_key(project) + '.lock'))):
+                    archive = transaction.rollback(outcome)
+                    ledger.clear(); ledger.update(ledger_before)
+                    epoch.clear(); epoch.update(epoch_before)
+                    acceptance.abort(HERE, project, journal, outcome)
+                    if pause_reason: decision_pause(project, {}, pause_reason)
+                    discovery.finalize_wrapper(project, False)
+                    finish_status(project, accepted=False, outcome=outcome, archive=archive)
+        finally:
+            if execution_guard is not None: execution_guard.__exit__(None, None, None)
 
 
 def main(argv=None) -> int:
@@ -529,11 +661,15 @@ def main(argv=None) -> int:
         parser.error('A dry-run cannot be combined with configuration/state changes')
     # Inspection creates no lock, runtime directory, or route ledger.
     if args.dry_run or (args.route_status and not any(x is not None for x in persistent.values()) and not args.route_sync):
-        policy, origins, _ = policy_for(HERE, project, tmp)
-        before = state_read(project)
-        ledger_path, ledger, epoch = load_ledger(HERE, project, before)
-        print_status(project, policy, origins, epoch, ledger_path)
-        return run_child(args_to_core(args, unknown)) if args.dry_run else 0
+        try:
+            policy, origins, _ = policy_for(HERE, project, tmp)
+            before = state_read(project)
+            ledger_path, ledger, epoch = load_ledger(HERE, project, before)
+            print_status(project, policy, origins, epoch, ledger_path)
+            return run_child(args_to_core(args, unknown)) if args.dry_run else 0
+        except (RuntimeError, OSError, ValueError) as exc:
+            print('ROUTE_CONTROLLER_ERROR:', str(exc), file=sys.stderr)
+            return 3
     lock_path = HERE / 'locks' / ('route-' + project_key(project) + '.lock')
     try:
         with file_lock(lock_path):
@@ -562,6 +698,10 @@ def main(argv=None) -> int:
             if args.rounds > policy["max_rounds_per_invocation"]:
                 parser.error("--rounds exceeds max_rounds_per_invocation")
             before = state_read(project)
+            recovered = recover_acceptance(project, policy)
+            if recovered is not None:
+                print('ROUND_OUTCOME:', recovered[1], flush=True)
+                return recovered[0]
             ledger_path, ledger, epoch = load_ledger(HERE, project, before)
             if args.route_sync:
                 if before["last_run"] != epoch["last_processed_run"]:
@@ -609,12 +749,12 @@ def main(argv=None) -> int:
                     # Consecutive executions delegate a *single* Codex round each.
                     code, outcome = advance_one(project, policy, ledger_path, ledger, epoch, cmd)
                     print("ROUND_OUTCOME:", outcome, flush=True)
+                if code:
+                    return code
                 if active(HERE, project):
                     result = safely(HERE, project)
                     print('SUPERVISION_RESULT:', json.dumps(result, ensure_ascii=False), flush=True)
                     if not result['proceed']: return 3
-                if code:
-                    return code
                 if outcome.startswith("PAUSED") or outcome.startswith("SKIPPED"):
                     return 0
         return 0

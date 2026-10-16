@@ -37,6 +37,25 @@ def _hash(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def _require_legacy_backend():
+    """Legacy live execution/application is retired, without migrating its costs.
+
+    Share R03's unconditional OS boundary first. Even a future certified R03
+    adapter must not silently reactivate this older multi-file apply protocol.
+    Tests may replace this guard only for local, synthetic transaction fixtures.
+    """
+    from supervision_executor import CodexSupervisorExecutor
+    CodexSupervisorExecutor._require_isolation()
+    raise ValueError('BLOCKED_LEGACY_SUPERVISION_MIGRATION_REQUIRED')
+
+
+def _unknown_reviews(data):
+    # Old "running" records have no R02 dispatch/completion receipt. Their
+    # reserved time is uncertain; never infer a free or safely retryable call.
+    return sorted(rid for rid, record in (data or {}).get('records', {}).items()
+                  if record.get('status') == 'running')
+
+
 def _json_bytes(value) -> bytes:
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode('utf-8')
 
@@ -234,6 +253,9 @@ def status(controller, project, ledger=None):
                      if epoch and epoch.get('effective_rounds', 0) >= total_budget(epoch, route_policy) else None)
     from supervision_scheduler import pending as queue_pending
     return {'policy': policy, 'enrolled': data is not None,
+            'legacy_execution': 'BLOCKED_LEGACY_SUPERVISION_MIGRATION_REQUIRED',
+            'unknown_review_ids': _unknown_reviews(data),
+            'automatic_retry_allowed': False,
             'event_queue': queue_pending(controller, project),
             'accepted_rounds_since_enrollment': len([r for r in accepted if r not in baseline]),
             'attempts_used': data['attempts_used'] if data else 0,
@@ -319,7 +341,8 @@ def _prompt(controller, project, request):
 
 
 def _execute(controller, project, review_dir, prompt, policy):
-    """Only this function can spend model time; tests replace it with a fake."""
+    """Retired transport; no caller can bypass the R03 OS-isolation boundary."""
+    _require_legacy_backend()
     from configuration import settings_for
     from runner_core import kill_process_tree
     executable = shutil.which('codex')
@@ -596,6 +619,7 @@ def _prepare_proposal(project, proposal, request, attempt_dir, triggers):
 
 
 def _apply(controller, project, data, proposal, request, attempt_dir, triggers):
+    _require_legacy_backend()
     rid = proposal['review_id']
     prefix = 'research/supervision/' + rid + '/'
     # Preparing the durable proposal is a distinct stage. Recheck its source
@@ -649,9 +673,17 @@ def maybe_supervise(controller, project, ledger, *, budget_reason=None, force=Fa
             if data and data.get('pending_transaction'):
                 _recover(controller, project, data)
             if not policy['enabled']: return {'status': 'disabled', 'proceed': True}
+            unknown = _unknown_reviews(data)
+            if unknown:
+                return {'status': 'blocked', 'proceed': False,
+                        'reason': 'UNKNOWN_EXTERNAL_OUTCOME', 'unknown_review_ids': unknown,
+                        'automatic_retry_allowed': False, 'migration_required': True,
+                        'error': 'Legacy running reviews require explicit audit; reservations and history are unchanged'}
             if data is None:
-                data = _enroll(controller, project)
-                _save(controller, project, data)
+                return {'status': 'blocked', 'proceed': False,
+                        'reason': 'LEGACY_SUPERVISION_HISTORY_UNAVAILABLE',
+                        'automatic_retry_allowed': False, 'migration_required': True,
+                        'error': 'No legacy cost authority; explicit audit/migration is required, not automatic zero enrollment'}
             _recover(controller, project, data)
             if _hash(_safe(project, 'GOAL.md').read_bytes()) != data['goal_sha256']:
                 return {'status': 'failed', 'proceed': False, 'error': 'Frozen GOAL differs from enrollment'}
@@ -660,6 +692,12 @@ def maybe_supervise(controller, project, ledger, *, budget_reason=None, force=Fa
                 return {'status': 'paused', 'proceed': False, 'review_id': data['active_review']}
             triggers = _triggers(data, ledger, policy, budget_reason, force, project)
             if not triggers: return {'status': 'not_due', 'proceed': True}
+            try:
+                _require_legacy_backend()
+            except ValueError as exc:
+                return {'status': 'blocked', 'proceed': False, 'reason': str(exc),
+                        'automatic_retry_allowed': False, 'migration_required': True,
+                        'error': 'Legacy live/apply is blocked; use explicit R05 configuration without resetting old costs'}
             rid = 'review-' + _hash(_json_bytes([data['goal_sha256'], triggers]))[:24]
             record = data['records'].setdefault(rid, {'status': 'pending', 'attempts': 0, 'triggers': triggers})
             remaining = int(policy['max_total_seconds'] - data['seconds_used'])
@@ -809,6 +847,8 @@ def history(controller, project):
     project = Path(project)
     data = _load(controller, project)
     return {'project': project_id(project), 'active_review': data.get('active_review') if data else None,
+            'legacy_execution': 'BLOCKED_LEGACY_SUPERVISION_MIGRATION_REQUIRED',
+            'unknown_review_ids': _unknown_reviews(data), 'automatic_retry_allowed': False,
             'attempts_used': data['attempts_used'] if data else 0,
             'seconds_used': data['seconds_used'] if data else 0,
             'records': [{'review_id': rid, **copy.deepcopy(record)}

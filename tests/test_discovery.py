@@ -288,19 +288,24 @@ class DiscoveryTests(unittest.TestCase):
         self.put('literature/primary.txt', 'A new primary paper revision')
         self.assertFalse(graph.status(self.project)['claims'][0]['accepted_contribution'])
 
-    def test_lean_tool_success_alone_never_becomes_a_verified_theorem(self):
+    def test_synthetic_lean_receipt_still_requires_independent_audit(self):
         self.put('proofs/lean/Check.lean', 'theorem target : True := True.intro')
         self.put('proofs/lean/lean-toolchain', 'leanprover/lean4:v4.29.1')
         self.put('proofs/lean/lake-manifest.json', {'version': '1.1.0', 'packages': []})
         self.claim(verification_mode='FORMAL_REQUIRED', formal_target={'file': 'proofs/lean/Check.lean', 'declaration': 'target'})
-        def launch(argv, **kwargs):
-            audit = self.project / 'proofs/lean' / argv[-1]
-            self.assertIn('#print axioms target', audit.read_text())
-            self.assertNotIn('--install', argv)
-            kwargs['stdout'].write(b"'target' does not depend on any axioms\ntarget : True\n")
-            return mock.Mock(wait=mock.Mock(return_value=0))
-        with mock.patch.object(formal_verifier.shutil, 'which', return_value='/simulated/elan'), mock.patch.object(formal_verifier.subprocess, 'run', return_value=mock.Mock(returncode=0, stdout='Lean version 4.29.1', stderr='')), mock.patch.object(formal_verifier.subprocess, 'Popen', side_effect=launch):
-            result = formal_verifier.run(self.project, 'C-1', 'proofs/lean/Check.lean', 'target')
+        # Synthetic tool evidence exercises existing scientific audit rules;
+        # no production verifier path is enabled and no process is started.
+        output = self.root / 'logs/example/formal/synthetic.log'
+        output.parent.mkdir(parents=True)
+        output.write_text("'target' does not depend on any axioms\ntarget : True\n", encoding='utf8')
+        item = graph.get(self.project, 'C-1')
+        result = {'schema_version': 1, 'claim_id': 'C-1', 'claim_revision': item['revision'],
+            'claim_sha256': item['spec_sha256'], 'proof_file': 'proofs/lean/Check.lean',
+            'declaration': 'target', 'status': 'TOOL_PASSED_AUDIT_PENDING',
+            'source_bindings': formal_verifier.source_bindings(self.project, self.project / 'proofs/lean'),
+            'output_file': str(output), 'output_sha256': research_quality.hash_file(output),
+            'test_fixture': 'SYNTHETIC_TOOL_RECEIPT_NOT_PROCESS_ISOLATION'}
+        graph.record_tool(self.project, 'C-1', 'formal_receipt', result)
         self.assertEqual(result['status'], 'TOOL_PASSED_AUDIT_PENDING')
         status = graph.status(self.project)['claims'][0]
         self.assertEqual(status['proof_status'], 'CANDIDATE'); self.assertFalse(status['accepted_contribution'])

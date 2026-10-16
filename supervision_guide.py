@@ -366,6 +366,15 @@ def _commit_abort(controller, project, plan):
     return {k: receipt[k] for k in _receipt_payload(plan)}
 
 
+def _restore_owned_afterimage(target, before, after):
+    """Restore only this transaction's bytes, never a later external version."""
+    current = _read(target)
+    if current == before: return
+    if current != after:
+        raise ValueError('GUIDE_CONFLICT: external edit during stale-guide recovery; refusing overwrite')
+    supervision._write(target, before)
+
+
 def _resume(controller, project, plan, history):
     key = (plan['kind'], plan['event_id'])
     _require_fixture(controller, project)
@@ -385,7 +394,7 @@ def _resume(controller, project, plan, history):
         if plan['binding'] != _binding(record, proposal, receipt): raise ValueError('Guide proposal binding changed')
         try: _fresh(controller, project, record)
         except ValueError:
-            if current == after: supervision._write(_path(project, ACTIVE), before)
+            _restore_owned_afterimage(_path(project, ACTIVE), before, after)
             return _commit_abort(controller, project, plan)
     elif 'ACTIVE_ATTEMPT_READONLY' in scheduler.restrictions(controller, project)['restrictions']:
         raise ValueError('ACTIVE_ATTEMPT_READONLY: guide rollback blocked')
@@ -399,7 +408,7 @@ def _resume(controller, project, plan, history):
         if plan['kind'] == 'APPLY':
             try: _fresh(controller, project, record)
             except ValueError:
-                supervision._write(target, before)
+                _restore_owned_afterimage(_path(project, ACTIVE), before, after)
                 return _commit_abort(controller, project, plan)
         return _commit_receipt(controller, project, plan)
     except Exception:

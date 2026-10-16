@@ -185,7 +185,10 @@ class KnowledgeInvalidationTests(unittest.TestCase):
     def test_novelty_source_loss_is_not_confused_with_proof_approval(self):
         import test_discovery
         self.chain(); test_discovery.DiscoveryTests.novelty_review(self,'A')
-        projection.build(self.root,self.project); self.put('literature/primary.txt','Changed original paper premise')
+        projection.build(self.root,self.project)
+        primary=self.project/'literature/primary.txt'; original=primary.read_bytes()
+        self.put('literature/primary.txt','Changed original paper premise')
+        claim_graph.refresh(self.project)
         projection.build(self.root,self.project)
         event=self.events().load(self.root,self.project)['events'][-1]
         self.assertEqual(event['type'],'GRAPH_INVALIDATED')
@@ -195,6 +198,11 @@ class KnowledgeInvalidationTests(unittest.TestCase):
         self.assertFalse(result['claim']['accepted_contribution'])
         self.assertTrue(any(e['review_kind']=='novelty' and not e['binding_matches']
             for p in result['lineage']['cause_paths'] for step in p for e in step.get('evidence',[])))
+        primary.write_bytes(original)
+        restored=claim_graph.status(self.project)['claims'][0]
+        self.assertEqual(restored['proof_status'],'INDEPENDENTLY_REVIEWED')
+        self.assertEqual(restored['novelty_status'],'PENDING')
+        self.assertFalse(restored['accepted_contribution'])
 
     def test_memory_upstream_loss_has_original_path_and_reason(self):
         from engine import knowledge_graph
