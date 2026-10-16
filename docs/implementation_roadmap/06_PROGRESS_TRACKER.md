@@ -12,8 +12,8 @@
 | R06 | 图谱投影 | DONE | a5785130a7816c6739899e37afac9ec504ea2e2c | 专项27/27；双项目原生入口24步；全量498：497通过/1原平台跳过；check all/doctor退出0 | 本轮只读投影已验收；原文页码/失效事件/检索/跨项目复用另按R07—R10；真实监督后端门禁未变 |
 | R07 | 原文溯源 | DONE | baebc92cc412e1cacac173f1540b04e7b11308c4 | 专项24/24；双项目原生入口33步；全量522：521通过/1原平台跳过；check all/doctor退出0 | 定理页、原PDF/提取/审查/主张pin已绑定；未核查位置及排版不作为决定性覆盖；真实监督仍阻断 |
 | R08 | 失效事件 | DONE | c7ae0209231670707db4e4af378fd02e19debfc2 | 专项24/24；原生入口32步含进程终止恢复；全量546：545通过/1原平台跳过；check all/doctor退出0 | 原主张图仍唯一权威；本地链无外部防删除锚；R09及以后未进入；真实监督仍阻断 |
-| R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 专项25/25；原生入口40步；全量571：570通过/1原平台跳过；check all/doctor退出0 | 默认关闭；坏依赖检索拒绝；F01—F07剩余及R08契约差异见审查待办；R10待进入 |
-| R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 实际D盘：隔离23/23+闭环4/4；原生入口30步；全量598：597通过/1原平台跳过；实际三项目check all通过 | 已应用D盘；F01—F07剩余及R08契约差异未闭合；停在R10 |
+| R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 审查修复后原生41步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
+| R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 审查修复后原生30步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
 | R11 | 候选模型 | TODO | — | — | — |
 | R12 | 搜索预算 | TODO | — | — | — |
 | R13 | 数学核验适配器 | TODO | — | — | — |
@@ -373,3 +373,40 @@ R03 新真实执行器继续阻断；旧监督旁路 F01 尚待修复，不能�
 F01-F07 其余修复与 R08 字节恢复契约差异按用户选择登记待办，不擅自改变旧契约。
 v3.4 T07-T09 离线开发闭环通过；不宣称已解决全部审查问题或可付费生产部署。
 完成 R10 后停止，R11-R20 保持 TODO，未进入后续轮次。
+
+## 2026-10-16 审查修复及R09/R10最终复验
+
+实现提交 `d08a8f89f2ac47ba7c614b3dfd31e7d6bef15780`，基于R10回执24d32d7。用户继续授权完成原审查剩余修复，
+并明确采用原R08政策：持久记录失效后恢复原字节仍须独立新审查。
+
+F01/F05：新旧真实监督统一门禁，旧live/apply退役，未知running保留预留且不重派。
+F02：自动及显式Lean入口均阻断未认证宿主执行，无elan保持UNAVAILABLE。
+F03：持久COMMIT_DECIDED，验证/接受持core锁；原run恢复路线和可信检查回执，
+未知检查停止审计；late-write/打印异常/真实硬退出不回滚已接受成果或重复记账。
+F04：独立route_registry见证，缺失/空/旧预算停止，显式登记/精确恢复，不清零。
+F06/F07：canonical普通pins完整验证，追加完整review/tool回执及摘要链，
+旧缺失历史不补造。R04两处freshness竞争已修：第三人工指南版本始终保留。
+
+python -B -m unittest discover -s tests -p 'test_review_*.py' -v
+  83/83通过，104.164秒。
+python -B -m unittest discover -s tests -v
+  681项，680通过、1项既有POSIX跳过，981.431秒，退出0。
+python -B scripts/verify_r09_offline.py --output <外部证据目录>
+  41步真实Windows research.cmd合成入口，0 provider请求；默认提示原字节保留。
+python -B scripts/verify_r10_offline.py --output <外部证据目录>
+  30步，双向授权/私有拒读/七维模型映射/来源失效/撤权和闭环通过。
+预算原生入口8步通过；真实进程os._exit覆盖接受决定、路线落账、检查未知、
+READY回执及最终结算中断；原run/消费去重，第三SHA拒绝，不重跑模型/工具。
+python -B research.py check all：实际三个项目通过。
+python -B research.py doctor --offline：实际D盘根目录/环境通过。
+
+843个个人文件路径/SHA完全一致；GOAL、STATE、消费、个人研究历史不变。
+R01契约/snapshot及R02scheduler/calls/ledger/process源码保持原字节，默认配置未改。
+所有功能修复位于实际D盘，未启用或迁移个人项目，未运行真实模型/Lean、未推送。
+
+R08明确观察入口为claim refresh；普通build/cache-only遇到尚未记录的新失效停止，
+不反写canonical；status/context/explain仍只读。瞬时只读检查不构成持久失效记录。
+R10公开来源SHA可核验，私有PDF/claim当前状态不跨项目读取，须源方重发/撤权。
+不能据离线回归声称真实OS隔离已认证、科学结论已证明或原独立报告已改判。
+详见docs/REVIEW_A0E23E3_FOLLOWUP.md及本会话outputs/review-fixes/。
+R09、R10完成并通过本次复验；R11—R20保持TODO，停止后续开发。
