@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "scope": "Synthetic receipt replay for v3.3 scheduling regression; no real project claims or model-quality evaluation.",
+  "core_obligations": {
+    "GOAL": "Keep the frozen exact authorization interface.",
+    "SECURITY": "Establish the quantified malicious-security invariant without weakened leakage."
+  },
+  "anchor_id": "synthetic-mainline",
+  "cases": [
+    {
+      "id": "unrelated-auxiliary-lemmas",
+      "reference_rationale": "Three rounds explicitly classify changed proofs of a side lemma as support. The frozen security obligation has no mainline progress.",
+      "rounds": [
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-1",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "SUPPORT_ONLY",
+          "goal_alignment": {
+            "scope": "SUPPORT",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-1.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-2",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "SUPPORT_ONLY",
+          "goal_alignment": {
+            "scope": "SUPPORT",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-2.md": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-3",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "SUPPORT_ONLY",
+          "goal_alignment": {
+            "scope": "SUPPORT",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-3.md": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      ],
+      "expected": {
+        "assessment": "DRIFT",
+        "finding_codes": [
+          "SUPPORT_DRIFT",
+          "CORE_OBLIGATION_STALLED"
+        ]
+      }
+    },
+    {
+      "id": "renamed-identical-evidence",
+      "reference_rationale": "Distinct paths contain the exact same evidence bytes. Self-reported CORE progress cannot make renamed content fresh. This does not assert the mathematics is wrong.",
+      "rounds": [
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-1",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/first.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-2",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/renamed.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-3",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/another-name.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ],
+      "expected": {
+        "assessment": "DRIFT",
+        "finding_codes": [
+          "REPEATED_EVIDENCE"
+        ]
+      }
+    },
+    {
+      "id": "open-core-without-progress",
+      "reference_rationale": "Fresh failure logs can be useful evidence while all three controller receipts explicitly leave the core obligation without progress.",
+      "rounds": [
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-1",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-1.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-2",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-2.md": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-3",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": false,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-3.md": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      ],
+      "expected": {
+        "assessment": "DRIFT",
+        "finding_codes": [
+          "CORE_OBLIGATION_STALLED"
+        ]
+      }
+    },
+    {
+      "id": "necessary-direct-dependency",
+      "reference_rationale": "An intermediate lemma that directly discharges a construction dependency, with fresh evidence each round, must not be treated as an unrelated support branch.",
+      "rounds": [
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-1",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "DIRECT_DEPENDENCY",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-1.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-2",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "DIRECT_DEPENDENCY",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-2.md": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-3",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "PROOF",
+          "result_status": "OPEN",
+          "goal_alignment": {
+            "scope": "DIRECT_DEPENDENCY",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/attempt-3.md": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        }
+      ],
+      "expected": {
+        "assessment": "ON_TRACK",
+        "finding_codes": []
+      }
+    },
+    {
+      "id": "necessary-core-counterexample-no-novelty",
+      "reference_rationale": "A necessary core refutation can be procedural progress with contribution_type=NONE. The rules do not require an invented new theorem or certify the refutation.",
+      "rounds": [
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-1",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "COUNTEREXAMPLE",
+          "result_status": "REFUTED",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/witness-1.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          },
+          "contribution_type": "NONE"
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-2",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "COUNTEREXAMPLE",
+          "result_status": "REFUTED",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/witness-2.md": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "contribution_type": "NONE"
+        },
+        {
+          "type": "RESEARCH_ROUND",
+          "run_id": "fixture-round-3",
+          "anchor_id": "synthetic-mainline",
+          "work_kind": "COUNTEREXAMPLE",
+          "result_status": "REFUTED",
+          "goal_alignment": {
+            "scope": "CORE",
+            "mainline_progress": true,
+            "reason": "Synthetic controller receipt; no mathematical certification."
+          },
+          "evidence_hashes": {
+            "proofs/witness-3.md": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          },
+          "contribution_type": "NONE"
+        }
+      ],
+      "expected": {
+        "assessment": "ON_TRACK",
+        "finding_codes": []
+      }
+    }
+  ]
+}

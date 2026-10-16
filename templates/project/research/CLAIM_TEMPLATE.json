@@ -6,6 +6,7 @@
   "statement": "填写准确候选定理",
   "assumptions": ["填写全部前提"],
   "dependencies": [],
+  "knowledge_dependencies": [],
   "obligation_ids": ["O-001"],
   "proposer": "codex",
   "contribution_type": "SECURITY_THEOREM",

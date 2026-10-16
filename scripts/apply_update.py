@@ -82,6 +82,8 @@ def update_plan(bundle,target):
         dest=target/rel;dest.resolve().relative_to(target.resolve())
         old=dest.read_bytes() if dest.is_file() else None
         action=item.get('action','replace')
+        if key=='config/supervision_policy.json' and action!='preserve_existing':
+            raise ValueError('Supervision policy updates must preserve existing operator settings')
         if action=='preserve_existing' and old is not None:continue
         if action=='merge_ignore':
             old=old or b'';existing=old.decode('utf-8-sig').splitlines()
@@ -130,7 +132,7 @@ def apply(bundle,target,*,perform=False,verify=True):
             if verify:
                 env=os.environ.copy();env['PYTHONDONTWRITEBYTECODE']='1'
                 for argv in ([sys.executable,'-B',str(target/'research.py'),'--help'],
-                    [sys.executable,'-B','-c','import configuration, research_quality, theory_gate, runner_core, engine.initialization, engine.claim_graph; configuration.settings_for()']):
+                    [sys.executable,'-B','-c','import configuration, research_quality, theory_gate, runner_core, supervision, supervision_quality, engine.initialization, engine.claim_graph, engine.knowledge_graph, engine.knowledge_links, engine.knowledge_history; configuration.settings_for()']):
                     result=subprocess.run(argv,cwd=target,env=env,capture_output=True,text=True,encoding='utf8',errors='replace',timeout=30)
                     if result.returncode:raise RuntimeError('更新后的框架检查失败：'+result.stderr[-1600:])
         except BaseException:

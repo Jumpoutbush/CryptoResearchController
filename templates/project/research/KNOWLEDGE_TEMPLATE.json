@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "id": "EVIDENCE-001",
+  "kind": "evidence",
+  "title": "替换为原始证据的明确名称",
+  "statement": "填写来源直接支持的事实及适用范围，避免把未验证推导写成已证定理。",
+  "sources": [
+    {
+      "path": "proofs/replace-with-actual-evidence.md",
+      "locator": "lines:1-3"
+    }
+  ],
+  "dependencies": [],
+  "claim_ids": [],
+  "assumptions": [],
+  "metadata": {
+    "scope": "填写前提、已核验范围与尚未完成的审查。"
+  }
+}

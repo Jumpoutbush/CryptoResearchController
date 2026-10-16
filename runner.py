@@ -182,11 +182,17 @@ def record_round(project: Path, ledger: dict, epoch: dict, policy: dict,
         epoch.setdefault('mainline_fingerprints', []).append(relevance['fingerprint'])
     epoch["effective_rounds"] += 1
     epoch["stagnation"] = 0 if progress else epoch["stagnation"] + 1
+    # Preserve per-round content hashes at acceptance. Current files cannot be
+    # used later to invent the content of a historical research receipt.
+    accepted_hashes = evidence_snapshot(project)
     ledger["events"].append({"type": "RESEARCH_ROUND", "route": epoch["route"],
                              "run_id": run_id, "effective_rounds": epoch["effective_rounds"],
                              "substantive_progress_claim": progress, "evidence_type": kind,
                              "changed_evidence_paths": artifacts, "at": stamp(),
                              "goal_alignment": relevance,
+                             "anchor_id": epoch['focus']['anchor_id'],
+                             "work_kind": review.get('work_kind'), "result_status": review.get('result_status'),
+                             "evidence_hashes": {rel: accepted_hashes[rel] for rel in artifacts if rel in accepted_hashes},
                              "note": "Progress is only a procedural signal; proofs and novelty remain unverified."})
     print('MAINLINE_SCOPE:', relevance['scope'], 'MAINLINE_PROGRESS:', progress,
           'REASON:', relevance['reason'])
@@ -316,11 +322,16 @@ def apply_review(project: Path, ledger: dict, epoch: dict, policy: dict, after: 
     return "PAUSED_FOR_REVIEW"
 
 
-def finish_status(project: Path, *, accepted: bool, outcome: str, run_id=None, archive=None):
+def finish_status(project: Path, *, accepted: bool, outcome: str, run_id=None, archive=None,
+                  supervision_result=None, knowledge_result=None):
     from runner_core import git_checkpoint
     status_path = HERE / 'logs' / project_key(project) / 'latest-status.json'
     status = read_json(status_path) if status_path.exists() else {}
     status.update({'wrapper_accepted': accepted, 'route_outcome': outcome})
+    if supervision_result is not None:
+        status['supervision'] = supervision_result
+    if knowledge_result is not None:
+        status['knowledge_index'] = knowledge_result
     if not accepted:
         status['status'] = 'INCOMPLETE'
         status['failure_archive'] = archive
@@ -330,6 +341,31 @@ def finish_status(project: Path, *, accepted: bool, outcome: str, run_id=None, a
     atom_json(status_path, status)
     if status.get('run_id'):
         atom_json(status_path.parent / (status['run_id'] + '.status.json'), status)
+
+
+def supervise_safely(project: Path, ledger: dict, epoch: dict, policy: dict) -> dict:
+    # Lock contention, invalid policy, or journal recovery can fail before the
+    # supervisor creates its own attempt. They still block the next model call,
+    # while an already accepted research round retains its accepted status.
+    try:
+        from supervision import maybe_supervise
+        return maybe_supervise(HERE, project, ledger,
+            budget_reason=('budget_exhausted'
+                           if epoch['effective_rounds'] >= total_budget(epoch, policy) else None))
+    except Exception as exc:
+        print('SUPERVISION_ERROR:', str(exc), file=sys.stderr, flush=True)
+        return {'status': 'failed', 'proceed': False, 'error': str(exc)}
+
+
+def refresh_knowledge(project: Path) -> dict:
+    """Materialise accepted sources under the execution lock, without a model."""
+    try:
+        from engine.knowledge_graph import refresh
+        with file_lock(HERE / 'locks' / (project_key(project) + '.lock')):
+            return {'status': 'refreshed', **refresh(project)}
+    except Exception as exc:
+        print('KNOWLEDGE_INDEX_ERROR:', str(exc), file=sys.stderr, flush=True)
+        return {'status': 'failed', 'error': str(exc)}
 
 
 def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
@@ -352,6 +388,9 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         return 3, 'ATTEMPT_PAUSED_FOR_ROUTE_REVIEW: close the fixed attempt and review the route; no model call made'
     if before.get('initialization_required') and (reason or epoch['review_pending'] or '--audit' in core_cmd):
         return 3, 'INITIALIZATION_PAUSED_FOR_ROUTE_REVIEW: review existing route budget before reinitialization; no model call made'
+    supervised = supervise_safely(project, ledger, epoch, policy)
+    if not supervised.get('proceed', True):
+        return 3, 'SUPERVISION_' + supervised['status'].upper()
     if reason and not epoch['review_pending']:
         mark_review(epoch, ledger, reason)
         save_ledger(ledger_path, ledger)
@@ -426,7 +465,15 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         if before.get('initialization_required'):
             __import__('engine.initialization', fromlist=['finalize']).finalize(project, after['last_run'])
         discovery.finalize_wrapper(project, True, after['last_run'])
-        finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'])
+        knowledge = refresh_knowledge(project)
+        if knowledge['status'] == 'failed':
+            finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], knowledge_result=knowledge)
+            return 3, 'KNOWLEDGE_INDEX_FAILED'
+        supervised = supervise_safely(project, ledger, epoch, policy)
+        finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'],
+                      supervision_result=supervised, knowledge_result=knowledge)
+        if not supervised.get('proceed', True):
+            return 3, 'SUPERVISION_' + supervised['status'].upper()
         return 0, outcome
     except KeyboardInterrupt:
         outcome = 'INTERRUPTED'

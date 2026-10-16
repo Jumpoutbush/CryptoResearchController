@@ -66,6 +66,13 @@ class FrameworkUpdateTests(unittest.TestCase):
         self.manifest([('config/research_policy.json',b'{"max_consecutive_support_rounds":2}','preserve_existing')])
         updater.apply(self.bundle,self.target,perform=True,verify=False)
         self.assertEqual((self.target/'config/research_policy.json').read_bytes(),b'{"max_consecutive_support_rounds":5}')
+    def test_supervision_policy_must_preserve_existing_operator_choices(self):
+        self.put(self.target/'config/supervision_policy.json',b'{"enabled":true,"max_reviews":9}')
+        self.manifest([('config/supervision_policy.json',b'{"enabled":false}','replace')])
+        with self.assertRaises(ValueError):updater.apply(self.bundle,self.target,perform=True,verify=False)
+        self.manifest([('config/supervision_policy.json',b'{"enabled":false}','preserve_existing')])
+        updater.apply(self.bundle,self.target,perform=True,verify=False)
+        self.assertEqual((self.target/'config/supervision_policy.json').read_bytes(),b'{"enabled":true,"max_reviews":9}')
     def test_failed_postcheck_rolls_back_framework_files(self):
         self.manifest([('runner.py',b'# updated runner','replace')])
         with patch.object(updater.subprocess,'run',side_effect=RuntimeError('postcheck failed')):

@@ -40,17 +40,35 @@ def evidence(project, paths, *, empty=False):
     strings(paths, 'evidence_paths', empty=empty)
     result = {}
     for rel in paths:
-        path = local_file(project, rel, roots={'proofs', 'research', 'literature', 'experiments'})
-        if rel.startswith(STORE + '/') or path.name in {'STATE.json', 'ROUND_REVIEW.json', 'ROUTE_SIGNAL.json', 'ROUTE_VERDICT.json', 'CHECKPOINT.json', 'THEORY_READINESS.json'}:
+        path = _unlinked_file(project, rel, roots={'proofs', 'research', 'literature', 'experiments'})
+        canonical = path.relative_to(project.resolve()).as_posix().casefold()
+        if (canonical.startswith(STORE.casefold() + '/')
+                or canonical == 'research/supervision_report.md'
+                or canonical.startswith('research/supervision/')
+                or path.name.casefold() in {'state.json', 'round_review.json', 'route_signal.json',
+                    'route_verdict.json', 'checkpoint.json', 'theory_readiness.json'}):
             raise ValueError('Control records cannot certify their own scientific content')
         result[rel] = hash_file(path)
     return result
 
 
+def _unlinked_file(project, relative, *, roots=None):
+    path = local_file(project, relative, roots=roots)
+    # resolve() alone hides a link to another location inside the same project.
+    # Inspect the original components, including a link followed by "..".
+    from runner_core import project_link
+    component = project
+    for part in Path(relative).parts:
+        component = component / part
+        if project_link(component):
+            raise ValueError('Symlink or junction evidence is not accepted: ' + relative)
+    return path
+
+
 def fresh(project, bindings):
     if not isinstance(bindings, dict): return False
     try:
-        return all(hash_file(local_file(project, rel)) == sha for rel, sha in bindings.items())
+        return all(hash_file(_unlinked_file(project, rel)) == sha for rel, sha in bindings.items())
     except (OSError, ValueError): return False
 
 

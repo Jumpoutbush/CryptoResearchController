@@ -295,7 +295,7 @@ git commit -m "Update research inputs and configuration"
 
 ## 九、验证范围与官方参考
 
-整合包通过本地结构检查、历史证据校验、控制器自动化测试和独立目录复现。当前环境没有可调用的 Codex 命令行及 Windows PowerShell，因此真实账户模型请求和 Windows 运行仍需首次 `doctor`、`check`、`--dry-run` 后用一轮 `run` 验证。
+本地结构检查、历史证据校验和模拟模型的控制器测试用于验证流程；真实账户模型请求需单独验证。安装后先执行 `doctor`、`check` 和 `--dry-run`，确认登录与配置，再由用户决定何时启动真实研究。
 
 Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档：
 
@@ -320,3 +320,36 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 ```
 
 初始化提示词随新项目复制到 prompts/initialize_from_idea.md。核对实际问题编号；有阻塞资料缺口时先补齐。上面的问题登记命令应在审核草案后执行。普通 PowerShell 可调用 research.cmd，无需管理员或修改执行策略。
+
+## v3.3 独立监督入口
+
+完整的开启、独立预算、报告查看、冲突处理与回滚说明见 [独立科研监督](SUPERVISION.md)，本次范围及后续路线见 [v3.3 发布说明](RELEASE_V3.3.md)。现有研究命令保持有效；监督使用独立进程和独立账本，在每三轮已验收科研工作及预算复评节点检查主线。
+
+```powershell
+.\research.cmd --version
+.\research.cmd supervision status all
+.\research.cmd supervision configure all --enabled on
+.\research.cmd supervision history secagg-research
+.\research.cmd supervision show secagg-research
+```
+
+`status`、`history`、`show` 和 `run --dry-run` 不调用模型。`configure` 只保存监督设置和登记基线，不修改科研状态。只有真实研究触发或显式 `supervision run` 才调用监督模型；监督费用与科研轮次分开记账。
+
+## v3.4 长期科研知识入口
+
+完整的知识类型、结构化模板、来源定位、版本及失效恢复说明见 [长期科研知识图谱](RESEARCH_KNOWLEDGE_V3.4.md)。知识与原有主张共用 `research/discovery/CLAIM_GRAPH.json`；保留原主张版本、审核和证据，原状态与预算不迁移。
+
+```powershell
+.\research.cmd knowledge status all
+.\research.cmd knowledge search secagg-research --query "反例"
+.\research.cmd knowledge refresh secagg-research
+.\research.cmd knowledge show secagg-research --id 知识ID
+.\research.cmd knowledge trace secagg-research --id 知识ID
+.\research.cmd knowledge impact secagg-research --id 知识ID
+```
+
+查询只读，`refresh` 显式持久化本地来源索引；这些命令都不调用模型。新增节点使用项目内 `research/KNOWLEDGE_TEMPLATE.json` 填写，再执行 `knowledge import 项目ID --file 文件 --reason 理由`。来源和上游变化会传播到下游，已登记的明确失效与版本修订需要重新绑定并复核。只读观察到的临时文件漂移不落盘，精确行为见使用说明。图谱不自行证明定理、关闭义务或批准系统实现。
+
+后续每个已验收科研轮自动刷新知识索引，再进入独立监督判断；科研提示词和监督请求均读取有长度上限的知识上下文。索引失败在 `logs/<项目ID>/latest-status.json` 的 `knowledge_index` 留下原因，并返回 `KNOWLEDGE_INDEX_FAILED`；已有研究结果及预算保留，本次后续监督和连续运行停止。手动刷新仍受项目锁保护。升级时不会提前刷新现有项目。
+
+`trace` 中 `frozen_nodes` / `frozen_edges` 对应推导绑定的历史快照，`unresolved_pins` 列出无法还原的绑定；`nodes` / `edges` 提供当前视图。`search` 可以命中历史，历史不表示当前通过审核。查看具体来源和旧版本时结合 `show --revision` 使用。

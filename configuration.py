@@ -51,6 +51,8 @@ def deep_merge(base, override):
 
 
 def validate_settings(settings):
+    from supervision import validate_policy as validate_supervision
+    settings['supervision_policy'] = validate_supervision(settings.get('supervision_policy', {}))
     from engine.discovery_scheduler import DEFAULTS, validate_policy as validate_discovery
     settings.setdefault('discovery_policy', copy.deepcopy(DEFAULTS))
     validate_discovery(settings['discovery_policy'])
@@ -104,11 +106,13 @@ def settings_for(project: Path | None = None):
     default = load_json(ROOT / 'config/defaults.json')
     if not isinstance(default, dict) or default.get('schema_version') != 1:
         raise ValueError('Missing/invalid config/defaults.json')
-    allowed = {'schema_version','model_policy','execution','literature','route_policy','research_policy','discovery_policy'}
+    allowed = {'schema_version','model_policy','execution','literature','route_policy','research_policy','discovery_policy','supervision_policy'}
     if set(default) - allowed:
         raise ValueError('Unknown global settings')
     settings = copy.deepcopy(default)
     settings['route_policy'] = load_json(ROOT / 'config/route_policy.json', {})
+    from supervision import validate_policy as validate_supervision
+    settings['supervision_policy'] = validate_supervision(load_json(ROOT / 'config/supervision_policy.json', {}))
     research_defaults = {
         'schema_version':1, 'require_round_review':True, 'max_consecutive_support_rounds':2,
         'require_decisive_evidence_for_pivot':True, 'require_theory_candidate_for_pivot':True,

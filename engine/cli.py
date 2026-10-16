@@ -65,7 +65,57 @@ def dispatch(args):
     return 0
 
 
+def dispatch_knowledge(args):
+    """Inspect or extend the existing graph without consuming research budget."""
+    import research
+    from . import knowledge_graph
+    action = args.action
+    readonly = action in {'status', 'search', 'show', 'trace', 'impact'}
+    if args.project == 'all':
+        if action not in {'status', 'search'}:
+            raise ValueError('knowledge all only supports status or search')
+        selected = research.projects()
+    else:
+        selected = [research.resolve_project(args.project)]
+    for project in selected:
+        with contextlib.ExitStack() as stack:
+            if not readonly:
+                stack.enter_context(research.project_lock(project))
+                stack.enter_context(file_lock(configuration.ROOT / 'locks' / (configuration.project_id(project) + '.lock')))
+            if action == 'status': result = knowledge_graph.status(project)
+            elif action == 'search': result = knowledge_graph.search(project, args.query, kind=args.kind, limit=args.limit)
+            elif action == 'show': result = knowledge_graph.get(project, args.id, revision=args.revision)
+            elif action == 'trace': result = knowledge_graph.trace(project, args.id)
+            elif action == 'impact': result = knowledge_graph.impact(project, args.id)
+            elif action == 'import': result = knowledge_graph.import_record(project, read_object(Path(args.file)), args.reason)
+            elif action == 'invalidate': result = knowledge_graph.invalidate(project, args.id, args.reason)
+            else: result = knowledge_graph.refresh(project)
+            research.print_json({'project': configuration.project_id(project), 'knowledge': result})
+    return 0
+
+
 def add_commands(subparsers, add_project, common_run_options):
+    top = subparsers.add_parser('knowledge', help='长期科研知识：来源追溯、失效传播与现有主张图')
+    subs = top.add_subparsers(dest='action', required=True)
+    descriptions = {'status': '只读查看来源、知识与现有主张的当前状态',
+        'search': '只读检索当前及历史知识；历史命中不表示当前通过',
+        'show': '只读查看节点；--revision 选择知识历史版本',
+        'trace': '只读追溯当前状态和精确绑定的历史来源快照',
+        'impact': '只读查看下游依赖影响',
+        'import': '持锁登记结构化知识及精确来源',
+        'refresh': '持锁刷新本地来源索引，不调用模型',
+        'invalidate': '持锁登记明确失效原因，保留历史'}
+    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate'):
+        cmd = subs.add_parser(action, help=descriptions[action], description=descriptions[action])
+        add_project(cmd); cmd.set_defaults(function=dispatch_knowledge)
+        if action in {'show', 'trace', 'impact', 'invalidate'}: cmd.add_argument('--id', required=True)
+        if action == 'show': cmd.add_argument('--revision', type=int, help='知识节点历史版本；主张沿用现有 claim show')
+        if action == 'search':
+            cmd.add_argument('--query', required=True)
+            cmd.add_argument('--kind', help='paper/theorem/evidence/failed_path/obligation/claim/source')
+            cmd.add_argument('--limit', type=int, default=20)
+        if action == 'import': cmd.add_argument('--file', required=True)
+        if action in {'import', 'invalidate'}: cmd.add_argument('--reason', required=True)
     for group, actions in [('problem', ('list', 'show', 'import')),
             ('attempt', ('start', 'status', 'run', 'extend', 'close')),
             ('claim', ('import', 'status', 'show', 'review', 'invalidate', 'refresh')),

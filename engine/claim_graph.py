@@ -31,6 +31,10 @@ def import_claim(project, spec, reason):
     for key in ('statement', 'proposer', 'nontriviality_argument'): text(spec.get(key), key)
     strings(spec.get('assumptions'), 'assumptions')
     strings(spec.get('dependencies'), 'dependencies', empty=True)
+    if 'knowledge_dependencies' in spec:
+        strings(spec['knowledge_dependencies'], 'knowledge_dependencies', empty=True)
+        if len(spec['knowledge_dependencies']) != len(set(spec['knowledge_dependencies'])):
+            raise ValueError('Duplicate knowledge dependency')
     strings(spec.get('obligation_ids'), 'obligation_ids')
     if spec.get('contribution_type') not in CORE_TYPES: raise ValueError('Claim requires a theoretical contribution type')
     if spec.get('verification_mode') not in {'FORMAL_REQUIRED', 'INDEPENDENT_MANUAL'}:
@@ -72,8 +76,12 @@ def import_claim(project, spec, reason):
     old = by_id.get(cid)
     digest = object_hash(spec)
     dep_pins = {d: {'revision': by_id[d]['revision'], 'spec_sha256': by_id[d]['spec_sha256']} for d in spec['dependencies']}
+    knowledge_pins = {}
+    if spec.get('knowledge_dependencies'):
+        from .knowledge_graph import pin_dependencies
+        knowledge_pins = pin_dependencies(project, spec['knowledge_dependencies'])
     current_binding = goal_binding(project)
-    if old and old['spec_sha256'] == digest and old['evidence'] == bindings and old['dependency_pins'] == dep_pins and old['binding'] == current_binding and not old.get('invalidated'):
+    if old and old['spec_sha256'] == digest and old['evidence'] == bindings and old['dependency_pins'] == dep_pins and old.get('knowledge_pins', {}) == knowledge_pins and old['binding'] == current_binding and not old.get('invalidated'):
         raise ValueError('Unchanged claim; no artificial revision')
     item = {'id': cid, 'revision': old['revision'] + 1 if old else 1,
         'spec': copy.deepcopy(spec), 'spec_sha256': digest, 'evidence': bindings,
@@ -82,6 +90,8 @@ def import_claim(project, spec, reason):
         'reviews': {}, 'invalidated': None, 'formal_receipt': None, 'counterexample_receipt': None,
         'imported_at': stamp(),
         'history': (old.get('history', []) + [{k: copy.deepcopy(v) for k, v in old.items() if k != 'history'}]) if old else []}
+    if 'knowledge_dependencies' in spec:
+        item['knowledge_pins'] = knowledge_pins
     if old:
         graph['claims'][graph['claims'].index(old)] = item
     else: graph['claims'].append(item)
@@ -117,6 +127,15 @@ def status(project):
         if object_hash(spec) != item['spec_sha256']: reasons.append('CLAIM_DIGEST_CHANGED')
         if binding != item['binding']: reasons.append('GOAL_OR_CONSTRAINTS_CHANGED')
         if not fresh(project, item['evidence']): reasons.append('EVIDENCE_CHANGED')
+        knowledge_pins = item.get('knowledge_pins', {})
+        if not isinstance(knowledge_pins, dict):
+            reasons.append('KNOWLEDGE_BINDING_INVALID')
+            knowledge_pins = {}
+        if set(knowledge_pins) != set(spec.get('knowledge_dependencies', [])):
+            reasons.append('KNOWLEDGE_BINDING_MISMATCH')
+        if knowledge_pins:
+            from .knowledge_graph import dependency_reasons
+            reasons.extend(dependency_reasons(project, knowledge_pins, graph=graph))
         try:
             problem = get_problem(project, spec['problem_id'], spec['problem_version'])
             if problem['spec_sha256'] != item['problem_sha256'] or not fresh(project, problem['source_bindings']):

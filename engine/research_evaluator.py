@@ -21,6 +21,7 @@ def evaluate_checkpoint(project, current, previous=None):
             fingerprints[cid] = object_hash({'spec': item['spec_sha256'], 'evidence': item['evidence'],
                 'reviews': {k: r['evidence'] for k, r in item['reviews'].items()},
                 'dependencies': item['dependency_pins'],
+                'knowledge_dependencies': item.get('knowledge_pins', {}),
                 'formal_sources': (item.get('formal_receipt') or {}).get('source_bindings')})
         witness = item.get('counterexample_receipt')
         if witness and receipt_fresh(project, item, witness):

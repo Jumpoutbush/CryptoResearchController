@@ -171,6 +171,8 @@ def command_check(args):
             runner_core.validate_project(project)
             settings_for(project)
             policy_for(ROOT, project)
+            import supervision
+            supervision.policy_for(ROOT, project)
             manifest = load_json(project / "PROJECT.json", {})
             checks = manifest.get("checks", [])
             if not isinstance(checks, list):
@@ -206,6 +208,7 @@ def command_check(args):
 
 
 def command_status(args):
+    import supervision
     selected = [resolve_project(args.project)] if args.project else projects()
     for project in selected:
         state = read_state(project)
@@ -217,7 +220,8 @@ def command_status(args):
         print_json({"project": project_id(project), "state": state,
                     "stop_requested": (project / ".control" / "STOP_REQUESTED").exists(),
                     "route_policy": policy, "policy_sources": origins,
-                    "route_epoch": epochs[-1] if epochs else None, "last_execution": latest})
+                    "route_epoch": epochs[-1] if epochs else None, "last_execution": latest,
+                    "supervision": supervision.status(ROOT, project, ledger)})
     return 0
 
 
@@ -350,6 +354,55 @@ def command_config(args):
             atomic_json(path, deep_merge(obj, updates))
     print_json({"project": project_id(project), "settings": settings_for(project)})
     return 0
+
+
+def command_supervision(args):
+    """Controller-only supervisor operations; preview/status never call a model."""
+    import supervision
+    action = args.supervision_command
+    if args.project == "all" and action not in {"status", "history", "configure"}:
+        raise ValueError("监督 run/show/rollback 必须指定一个项目；all 仅支持 status/history/configure。")
+    selected = projects() if args.project == "all" or (action in {"status", "history"} and not args.project) else [resolve_project(args.project)]
+    updates = {}
+    if action == "configure":
+        fields = ("interval", "max_reviews", "max_attempts_per_review", "max_seconds",
+                  "max_total_seconds", "model", "effort")
+        updates = {key: getattr(args, key) for key in fields if getattr(args, key) is not None}
+        for field in ("model", "effort"):
+            if updates.get(field) == "inherit":
+                updates[field] = ""
+        if args.enabled is not None:
+            updates["enabled"] = args.enabled == "on"
+    failed = False
+    for project in selected:
+        if action in {"history", "show"}:
+            result = (supervision.history(ROOT, project) if action == "history"
+                      else supervision.show_review(ROOT, project, args.id))
+            print_json({"project": project_id(project), **result})
+            continue
+        if action == "status" or (action == "run" and args.dry_run):
+            print_json({"project": project_id(project), **supervision.status(ROOT, project)})
+            continue
+        # maybe_supervise owns the core execution lock; operator writes take it here.
+        with project_lock(project):
+            if action == "run":
+                import runner_core
+                from route_budget import load_ledger, total_budget
+                state = runner_core.validate_project(project)
+                route_policy, _, _ = policy_for(ROOT, project)
+                _, ledger, epoch = load_ledger(ROOT, project, state)
+                budget_reason = "budget_exhausted" if epoch["effective_rounds"] >= total_budget(epoch, route_policy) else None
+                result = supervision.maybe_supervise(ROOT, project, ledger,
+                    budget_reason=budget_reason, force=args.force)
+                failed = failed or not result.get("proceed", True)
+            else:
+                with file_lock(ROOT / "locks" / (project_key(project) + ".lock")):
+                    if action == "configure":
+                        result = supervision.configure(ROOT, project, updates)
+                    else:
+                        result = supervision.rollback(ROOT, project, args.id)
+            print_json({"project": project_id(project), **result})
+    return 2 if failed else 0
 
 
 def command_fetch(args):
@@ -803,6 +856,8 @@ def common_run_options(parser, *, run=True):
 
 def parser():
     p = argparse.ArgumentParser(description="统一密码学自动研究框架：在根目录指定项目，在项目目录省略项目名。")
+    version = (Path(__file__).resolve().parent / "VERSION").read_text(encoding="utf-8-sig").strip()
+    p.add_argument("--version", action="version", version="CryptoResearchController " + version)
     sub = p.add_subparsers(dest="command", required=True)
     def command(name, function, help_text):
         c = sub.add_parser(name, help=help_text)
@@ -840,6 +895,24 @@ def parser():
     c.add_argument("--web-search", choices=("live", "cached", "disabled"))
     c.add_argument("--pdf-download", choices=("on", "off"))
     c.add_argument("--pdf-limit", type=int); c.add_argument("--pdf-max-mb", type=int)
+    c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督")
+    supervision_sub = c.add_subparsers(dest="supervision_command", required=True)
+    for action in ("status", "history", "show", "configure", "run", "rollback"):
+        supervisor = supervision_sub.add_parser(action)
+        add_project(supervisor)
+        if action == "configure":
+            supervisor.add_argument("--enabled", choices=("on", "off"))
+            for field in ("interval", "max-reviews", "max-attempts-per-review", "max-seconds", "max-total-seconds"):
+                supervisor.add_argument("--" + field, type=int)
+            supervisor.add_argument("--model", help="独立监督模型；inherit 沿用 critical 模型")
+            supervisor.add_argument("--effort", choices=("inherit", *EFFORTS))
+        elif action == "run":
+            supervisor.add_argument("--dry-run", action="store_true", help="只读显示状态，不执行监督模型")
+            supervisor.add_argument("--force", action="store_true", help="显式触发当前快照监督，仍遵守独立预算和幂等约束")
+        elif action == "rollback":
+            supervisor.add_argument("--id", required=True, help="最新已应用监督记录的 review_id")
+        elif action == "show":
+            supervisor.add_argument("--id", help="监督记录的 review_id；默认查看最近记录")
     c = command("fetch", command_fetch, "更新文献与本地 PDF 提取")
     add_project(c); c.add_argument("--offline", action="store_true")
     c = command("review", command_review, "独立审查；--prepare 生成审查材料")

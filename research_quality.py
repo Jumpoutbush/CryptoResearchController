@@ -68,6 +68,9 @@ def scientific_files(project, paths):
     found = []
     for relative in paths:
         path = local_file(project, relative, roots={'proofs', 'experiments', 'literature', 'research'})
+        rel = path.relative_to(project.resolve()).as_posix().casefold()
+        if rel == 'research/supervision_report.md' or rel.startswith('research/supervision/'):
+            raise ValueError('Supervision scheduling outputs are not scientific evidence')
         if path.name in denied:
             raise ValueError('A scheduling receipt cannot be its own scientific evidence')
         found.append((relative, path))

@@ -256,6 +256,9 @@ def evidence_path(project: Path, raw: str) -> Path | None:
     if path.is_symlink() or not resolved.is_file():
         return None
     parts = resolved.relative_to(project.resolve()).parts
+    relative = resolved.relative_to(project.resolve()).as_posix().casefold()
+    if relative == 'research/supervision_report.md' or relative.startswith('research/supervision/'):
+        return None
     if not parts or parts[0] not in {"proofs", "experiments", "literature", "research"}:
         return None
     excluded = {"STATE.json", "ROUTE_SIGNAL.json", "ROUTE_VERDICT.json",
@@ -281,6 +284,8 @@ def evidence_snapshot(project: Path) -> dict[str, str]:
             if "_upgrade_proposals" in p.parts or "pdfs" in p.parts or p.stat().st_size > 4_000_000:
                 continue
             rel = p.relative_to(project).as_posix()
+            if rel.casefold() == 'research/supervision_report.md' or rel.casefold().startswith('research/supervision/'):
+                continue
             out[rel] = hashlib.sha256(p.read_bytes()).hexdigest()
     return out
 
