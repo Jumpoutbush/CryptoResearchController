@@ -247,6 +247,8 @@ def derive(controller, project):
                        provenance='TEXT_CONTAINMENT' if text else 'HISTORICAL_MEMORY_DEPENDENCY_PIN',
                        pin=pin,verified='PENDING_REVALIDATION')
             else: g.gaps.add('UNMAPPED_HISTORICAL_MEMORY_PIN:'+dep)
+    from . import sources
+    sources.project(g,claim_nodes)
     _trajectory(g, problem_nodes)
     after = _manifest(controller, project)
     if after != manifest: raise ValueError('SOURCE_CHANGED_DURING_BUILD')
