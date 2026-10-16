@@ -16,7 +16,7 @@
 | R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 审查修复后原生30步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
 | R11 | 候选模型 | DONE | 566612a38bafd37635f1c113c0b2c1e4aea7c8a5 | 专项40/40；真实Windows入口35步；全量721：720通过/1既有平台跳过；check all/doctor通过 | 只登记候选；保守归一化去重；CONDITIONAL不能自动READY；真实监督/Lean阻断 |
 | R12 | 搜索预算 | DONE | 2ac1e71d83f138364939d79f9fd3e22cb756c1c0 | 候选专项78/78；真实Windows入口63步；全量759：758通过/1既有平台跳过；check all/doctor通过 | 最多3候选的建议窗口；原预算唯一权威；归属不证明提示注入；真实监督/Lean阻断 |
-| R13 | 数学核验适配器 | TODO | — | — | — |
+| R13 | 数学核验适配器 | DONE | ce0125947d56e20b3b4690d8005017c30567a965 | 专项27/27；真实Windows入口28步；全量786：785通过/1既有平台跳过；check all/doctor通过 | 固定整数worker仅核验机器谓词；Lean静态预检始终阻断；未审自然语义不升级科学等级 |
 | R14 | 密码学安全审查 | TODO | — | — | — |
 | R15 | 分支收束 | TODO | — | — | — |
 | R16 | 评估数据集 | TODO | — | — | — |
@@ -484,3 +484,44 @@ a1e9d91eecde612f0efc8e8e31f59b36998248c0（Apache-2.0）；具体函数、源文
 本会话outputs/R12保存真实命令、正常/故障JSON、源码摘要和文件清单。未改变个人GOAL、STATE、
 预算、历史、门禁或证明结论，真实监督及Lean继续阻断，无付费轮次或推送。
 R12回执提交后才进入R13，再逐轮完成R14；R15及以后不进入。
+
+## R13 数学核验适配器本地验收回执（2026-10-16）
+
+先核对R12的2ac1e71/ade5d70及既有审查修复回执，再读取当前R13、对应OpenSource附录及
+共享公开研究材料。实现提交 `ce0125947d56e20b3b4690d8005017c30567a965`，13份公开文件。
+
+薄适配复用旧整数AST/精确见证和Lean输入预检；旧search/run默认记工具回执语义不变。
+新请求冻结candidate/claim/problem修订、目标、来源、工具源码、Python版本与原资源策略。
+request/STARTED/receipt配对持久化；完整完成幂等重放，缺失冻结输入或未知结果不自动重跑。
+反例保存机器证书并用原check_witness复核；只读recheck不派发第二个搜索。
+核验元数据没有apply入口，不写canonical主张、科学接受、候选状态、STATE或消费。
+
+整数检查仅执行固定受信data-only工作进程，空临时cwd/最小环境、原ProcessTree强制超时，
+资源上限取原策略与10000点/3秒/15秒wall的较小值。它不是任意程序执行后端，
+os_deny_read_or_network_isolation_certified=false。Lean仅静态预检，不执行版本探测、
+Lean/Lake或下载：缺失工具保留UNAVAILABLE，有工具标记仍ISOLATION_UNCERTIFIED。
+True弱化目标和未完成标记明确提示；语义、公理与原密码学目标的对应始终待独立审查。
+工具统一词汇不等于PROVED；10000点未发现反例仍只NO_COUNTEREXAMPLE_WITHIN_BOUND。
+
+实际命令（cwd均为D:\CryptoResearchController）：
+
+- `python -B -m unittest discover -s tests -p test_verifier_*.py -v`：27/27通过，43.669秒，退出0。
+- `python -B scripts/verify_r13_offline.py --output <本会话outputs/R13/entry-final>`：真实Windows
+  research.cmd临时样例28步通过，35.815秒。精确错误多项式反例与证书复查、10000点真式、
+  True静态弱化/无elan回执、来源和claim版本过期、完成重放不执行均覆盖。
+  审计仅允许2个固定整数worker，其余模型/网络/监督/Lean执行均0，原预算/状态逐字不变。
+- `python -B -m unittest discover -s tests -v`：786项，785通过、1项既有POSIX跳过，
+  1105.123秒，退出0；127份公开Python文件在最终专项/入口/全回归期间摘要一致。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`退出0。
+- 暂存diff --check通过；311份范围外既有文件、843个个人文件路径及SHA完全一致。
+  EOF空行清理发生在最终冻结前，完整回归之后没有修改生产或测试源码。
+
+Numina固定1c9af8a52e715f22fede766425ba3d3b95526132，README声明MIT但完整许可文件未找到，
+故许可证全文SHA为空，不复制代码。OpenEvolve沿a1e9d91eecde612f0efc8e8e31f59b36998248c0
+Apache-2.0；OpenAI/math固定1581d4cbdd69a0faf34b2089614fe2a814316a6a Apache-2.0；
+LeanDojo核对弃用声明仅作历史参考，不引入依赖。全部源文件/许可证摘要见
+docs/VERIFIERS_R13.md与本会话outputs/R13/opensource-reference.json，只读核验未安装运行。
+
+R13全部实际日志、正常/故障JSON、变更清单与来源摘要保存于outputs/R13。
+个人GOAL/STATE/预算/研究历史与证明结论不变；真实监督/Lean继续阻断，无付费调用或推送。
+R13回执提交后才进入R14；R14完成后停止，不进入R15，也不宣称完整v3.5/v4.0已发布。
