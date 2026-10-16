@@ -775,6 +775,8 @@ def rollback(controller, project, review_id):
 
 
 def prompt_context(controller, project):
+    from supervision_runtime import disabled
+    if disabled(controller, project): return ''
     policy = policy_for(controller, project)
     data = _load(controller, project)
     if data and data.get('pending_transaction'):

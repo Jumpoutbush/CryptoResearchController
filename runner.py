@@ -349,9 +349,11 @@ def supervise_safely(project: Path, ledger: dict, epoch: dict, policy: dict) -> 
     # while an already accepted research round retains its accepted status.
     try:
         from supervision_scheduler import enabled, before_run
+        from supervision_runtime import disabled, queue_before
+        if disabled(HERE, project): return {'status': 'disabled', 'proceed': True}
         if enabled(HERE, project):
-            return before_run(HERE, project, ledger, epoch,
-                review_required=bool(needs_review(epoch, policy)), route_lock_held=True, effective_route_policy=policy)
+            return queue_before(HERE, project, ledger, epoch,
+                route_lock_held=True, effective_route_policy=policy)
         from supervision import maybe_supervise
         return maybe_supervise(HERE, project, ledger,
             budget_reason=('budget_exhausted'
@@ -479,11 +481,15 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         if before.get('initialization_required'):
             __import__('engine.initialization', fromlist=['finalize']).finalize(project, after['last_run'])
         discovery.finalize_wrapper(project, True, after['last_run'])
+        # The legacy memory refresh can revise CLAIM_GRAPH metadata. Freeze the
+        # opt-in event after that existing post-accept maintenance, not before it.
+        from supervision_runtime import active
+        knowledge = refresh_knowledge(project) if active(HERE, project) else None
         queued = queue_supervision_after_accept(project, ledger, epoch, policy, after['last_run'], reviewed=reviewing)
         if queued['status'] == 'failed':
             finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], supervision_result=queued)
             return 3, 'SUPERVISION_QUEUE_FAILED'
-        knowledge = refresh_knowledge(project)
+        if knowledge is None: knowledge = refresh_knowledge(project)
         if knowledge['status'] == 'failed':
             finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], knowledge_result=knowledge)
             return 3, 'KNOWLEDGE_INDEX_FAILED'
@@ -571,25 +577,47 @@ def main(argv=None) -> int:
                 return 0
             if args.dry_run or args.fetch_only or args.prepare_pro:
                 return run_child(args_to_core(args, unknown))
+        # Science keeps the original route/core locks. Consumption must occur
+        # outside those non-reentrant locks and outside ProjectTransaction.
+        from supervision_runtime import active, safely
+        with file_lock(HERE / 'locks' / ('run-loop-' + project_key(project) + '.lock')):
             for count in range(args.rounds):
-                state = state_read(project)
-                ledger_path, ledger, epoch = load_ledger(HERE, project, state)
-                if (project / '.control/STOP_REQUESTED').exists():
-                    print('STOP_REQUESTED: stopping before the next round')
-                    return 0
-                if state["decision"] in STOP_DECISIONS or state["phase"] == "DONE":
-                    print("PROJECT_PAUSED_OR_DONE:", state["decision"], state["phase"])
-                    save_ledger(ledger_path, ledger)
-                    return 0
-                cmd = args_to_core(args, unknown)
-                # Consecutive executions delegate a *single* Codex round each.
-                code, outcome = advance_one(project, policy, ledger_path, ledger, epoch, cmd)
-                print("ROUND_OUTCOME:", outcome, flush=True)
+                with file_lock(lock_path):
+                    state = state_read(project)
+                    ledger_path, ledger, epoch = load_ledger(HERE, project, state)
+                    if (project / '.control/STOP_REQUESTED').exists() or state['decision'] in STOP_DECISIONS or state['phase'] == 'DONE':
+                        return 0
+                    if active(HERE, project) and state['decision'] not in STOP_DECISIONS and state['phase'] != 'DONE':
+                        recovered = supervise_safely(project, ledger, epoch, policy)
+                        if not recovered.get('proceed', True): return 3
+                if active(HERE, project):
+                    result = safely(HERE, project)
+                    if not result['proceed']:
+                        print('SUPERVISION_RESULT:', json.dumps(result, ensure_ascii=False), flush=True)
+                        return 3
+                with file_lock(lock_path):
+                    state = state_read(project)
+                    ledger_path, ledger, epoch = load_ledger(HERE, project, state)
+                    if (project / '.control/STOP_REQUESTED').exists():
+                        print('STOP_REQUESTED: stopping before the next round')
+                        return 0
+                    if state["decision"] in STOP_DECISIONS or state["phase"] == "DONE":
+                        print("PROJECT_PAUSED_OR_DONE:", state["decision"], state["phase"])
+                        save_ledger(ledger_path, ledger)
+                        return 0
+                    cmd = args_to_core(args, unknown)
+                    # Consecutive executions delegate a *single* Codex round each.
+                    code, outcome = advance_one(project, policy, ledger_path, ledger, epoch, cmd)
+                    print("ROUND_OUTCOME:", outcome, flush=True)
+                if active(HERE, project):
+                    result = safely(HERE, project)
+                    print('SUPERVISION_RESULT:', json.dumps(result, ensure_ascii=False), flush=True)
+                    if not result['proceed']: return 3
                 if code:
                     return code
                 if outcome.startswith("PAUSED") or outcome.startswith("SKIPPED"):
                     return 0
-            return 0
+        return 0
     except (RuntimeError, OSError, ValueError, json.JSONDecodeError) as exc:
         print("ROUTE_CONTROLLER_ERROR:", str(exc), file=sys.stderr)
         return 3

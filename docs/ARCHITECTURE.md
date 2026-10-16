@@ -52,3 +52,12 @@ v3.4 在原 `research/discovery/CLAIM_GRAPH.json` 增加长期知识记录，不
 新项目继承共用方法与目录；用户提供个性化目标、参数、安全定义和原始论文即可。模板生成的检索词只是初始检索入口，首次研究继续细化近邻检索和基线。新增领域配置时在 profiles 写方法文件并在 config/profiles.json 注册。项目科学台账可以保留领域特有结构；机器调度只依赖公共 STATE、GATES、单轮报告与路线信号，不强制将 Falcon 与 SecAgg 的所有主张账本改成同一格式。
 
 科研新颖性和定理闭合仍需要原文和证据核验；本包完成了自动流程与可复现接口，保留两个项目尚未完成研究的真实状态。
+# R05 supervision orchestration
+
+`supervision_runtime.py` connects the existing queue, executor and single-file guide
+transaction after accepted research commits. A run-loop lock serializes science;
+route/core/queue locks retain their original order. Model consumption and guide
+application occur outside the science transaction and route lock. Explicit opt-in
+activation has an enrollment watermark and a disabled crash fence. Cost balances
+remain exclusively in the original supervision ledger; unknown external outcomes
+are never retried automatically. See [R05 operations](SUPERVISION_R05_INTEGRATION.md).

@@ -360,6 +360,29 @@ def command_supervision(args):
     """Controller-only supervisor operations; preview/status never call a model."""
     import supervision
     action = args.supervision_command
+    if action in {'enable', 'disable'}:
+        import supervision_runtime as runtime
+        batch = args.all or args.project == 'all'
+        if args.all and args.project: raise ValueError('Use one project or --all, not both.')
+        if not batch and not args.project: raise ValueError('Specify a project or --all.')
+        selected = projects() if batch else [resolve_project(args.project)]
+        plan = [runtime.preview_configuration(ROOT, p, enabled=action == 'enable', backend=args.executor) for p in selected]
+        if args.dry_run:
+            print_json({'status': 'DRY_RUN', 'projects': plan}); return 0
+        if batch and not args.confirm: raise ValueError('Batch changes require --dry-run first, then --confirm.')
+        results = [runtime.configure(ROOT, p, enabled=action == 'enable', backend=args.executor) for p in selected]
+        print_json({'status': 'CONFIGURED', 'projects': results}); return 0
+    if action in {'run', 'recover'}:
+        import supervision_runtime as runtime
+        if args.project and args.project != 'all':
+            project = resolve_project(args.project)
+            if runtime.settings(ROOT, project):
+                if action == 'run' and args.force and not args.dry_run:
+                    from supervision_scheduler import record_manual
+                    record_manual(ROOT, project)
+                result = runtime.process(ROOT, project, dry_run=args.dry_run)
+                print_json(result); return 0 if result['proceed'] else 2
+        if action == 'recover': raise ValueError('R05 recovery requires an explicitly configured project.')
     if action in {'preview', 'apply', 'guide-recover'} or (action == 'rollback' and args.event_id):
         import supervision_guide as guide
         if args.project == 'all': raise ValueError('Guide operations require one project.')
@@ -410,10 +433,18 @@ def command_supervision(args):
         if action in {"history", "show"}:
             result = (supervision.history(ROOT, project) if action == "history"
                       else supervision.show_review(ROOT, project, args.id))
+            if action == 'history':
+                import supervision_runtime as runtime
+                if runtime.settings(ROOT, project):
+                    from supervision_scheduler import pending
+                    result['event_history'] = pending(ROOT, project)
             print_json({"project": project_id(project), **result})
             continue
         if action == "status" or (action == "run" and args.dry_run):
-            print_json({"project": project_id(project), **supervision.status(ROOT, project)})
+            import supervision_runtime as runtime
+            result = supervision.status(ROOT, project)
+            if runtime.settings(ROOT, project): result['automation'] = runtime.settings(ROOT, project)
+            print_json({"project": project_id(project), **result})
             continue
         # maybe_supervise owns the core execution lock; operator writes take it here.
         with project_lock(project):
@@ -929,10 +960,17 @@ def parser():
     c.add_argument("--pdf-limit", type=int); c.add_argument("--pdf-max-mb", type=int)
     c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督", aliases=['supervise'])
     supervision_sub = c.add_subparsers(dest="supervision_command", required=True)
-    for action in ("status", "pending", "history", "show", "configure", "run", "rollback", "execute", "executor-info", "preview", "apply", "guide-recover"):
+    for action in ("status", "pending", "history", "show", "configure", "run", "rollback", "execute", "executor-info", "preview", "apply", "guide-recover", "enable", "disable", "recover"):
         supervisor = supervision_sub.add_parser(action)
         if action != 'executor-info': add_project(supervisor)
-        if action == "configure":
+        if action in {'enable', 'disable'}:
+            supervisor.add_argument('--all', action='store_true', help='全部登记项目；先dry-run，执行需confirm')
+            supervisor.add_argument('--dry-run', action='store_true')
+            supervisor.add_argument('--confirm', action='store_true')
+            supervisor.add_argument('--executor', choices=('codex', 'fake'), default='codex', help='Fake仅允许已注册的临时夹具')
+        elif action == 'recover':
+            supervisor.add_argument('--dry-run', action='store_true')
+        elif action == "configure":
             supervisor.add_argument("--enabled", choices=("on", "off"))
             for field in ("interval", "max-reviews", "max-attempts-per-review", "max-seconds", "max-total-seconds"):
                 supervisor.add_argument("--" + field, type=int)

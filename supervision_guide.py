@@ -124,7 +124,7 @@ def _proposal(controller, project, event_id):
     return record, proposal, receipt
 
 
-def _fresh(controller, project, record):
+def _fresh(controller, project, record, *, prompt=False):
     """No snapshot rebuild: exact captured source hashes and accepted-run binding."""
     snapshot = record['snapshot']
     try:
@@ -140,6 +140,17 @@ def _fresh(controller, project, record):
         for source in snapshot['source_manifest']:
             root = project if source['scope'] == 'PROJECT' else controller
             path = _path(root, source['path'])
+            if prompt and source['scope'] == 'PROJECT' and source['path'] == 'research/STATE.json' and path.is_file():
+                frozen = next((s for s in snapshot['sources'] if s['path'] == source['path']
+                               and not s.get('truncated')), None)
+                if frozen:
+                    original = executor.strict_json(frozen['content'])
+                    from route_budget import generate_directive, policy_for, selected_route
+                    epoch = route['epochs'][-1]
+                    expected = {**original, 'next_task': generate_directive(selected_route(original), epoch,
+                        policy_for(Path(controller), Path(project))[0], bool(epoch.get('review_pending')),
+                        epoch.get('review_reason'), original.get('next_task', ''))}
+                    if state == expected: continue
             if not path.is_file() or digest_file(path) != source['sha256']: raise ValueError('source changed')
         for source in snapshot['missing']:
             if source['reason'] != 'MISSING': continue
@@ -465,6 +476,8 @@ def recover(controller, project, event_id):
 
 def prompt_context(controller, project):
     """Verified single insertion; stale scientific inputs yield an expiry notice."""
+    from supervision_runtime import disabled
+    if disabled(controller, project): return ''
     folder = Path(controller) / 'state/supervision' / configuration.project_id(project) / 'event_queue'
     if not (Path(project) / ACTIVE).exists() and not (folder / 'guide-plans').exists(): return ''
     history = _history(controller, project); current = _managed(controller, project, history)
@@ -475,7 +488,7 @@ def prompt_context(controller, project):
     if history['head'] is None: return ''
     plan = history['plans'][('APPLY', history['head'])]
     record, _, _ = _proposal(controller, project, history['head'])
-    try: _fresh(controller, project, record)
+    try: _fresh(controller, project, record, prompt=True)
     except ValueError:
         return '# Supervision guide EXPIRED\nFrozen inputs changed; ignore the archived task and use GOAL/current accepted state. No scientific status was changed.'
     if current != _decode(plan['after']): raise ValueError('GUIDE_CONFLICT: current guide does not match accepted history')

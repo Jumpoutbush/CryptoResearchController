@@ -357,3 +357,10 @@ Codex 配置、网页搜索、项目根识别与沙盒参数参考官方文档�
 后续每个已验收科研轮自动刷新知识索引，再进入独立监督判断；科研提示词和监督请求均读取有长度上限的知识上下文。索引失败在 `logs/<项目ID>/latest-status.json` 的 `knowledge_index` 留下原因，并返回 `KNOWLEDGE_INDEX_FAILED`；已有研究结果及预算保留，本次后续监督和连续运行停止。手动刷新仍受项目锁保护。升级时不会提前刷新现有项目。
 
 `trace` 中 `frozen_nodes` / `frozen_edges` 对应推导绑定的历史快照，`unresolved_pins` 列出无法还原的绑定；`nodes` / `edges` 提供当前视图。`search` 可以命中历史，历史不表示当前通过审核。查看具体来源和旧版本时结合 `show --revision` 使用。
+# R05 可选自动监督
+
+统一 run/watch 接入及启用、停用、原回执恢复操作见 [R05 指南](SUPERVISION_R05_INTEGRATION.md)。
+新旧项目默认关闭。先 `research.cmd supervise enable --all --dry-run` 只读预览预算；
+单项目显式启用或批量 `--confirm` 后才接入自动调度。当前真实 Codex 后端仍阻断，
+Fake 只允许注册的临时合成项目。`supervise disable <project>` 保留成本、指南和历史，
+关闭自动消费及提示注入；`history` 展示原记录及新事件/指南状态。

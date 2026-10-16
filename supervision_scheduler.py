@@ -22,6 +22,9 @@ from route_budget import file_lock, stamp
 
 
 def enabled(controller, project):
+    from supervision_runtime import settings
+    activation = settings(controller, project)
+    if activation: return activation['enabled'] and supervision.policy_for(controller, project)['enabled']
     return load_defaults(controller)['enabled'] and supervision.policy_for(controller, project)['enabled']
 
 
