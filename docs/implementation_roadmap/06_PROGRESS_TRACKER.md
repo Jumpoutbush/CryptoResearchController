@@ -7,7 +7,7 @@
 | R01 | 监督契约/快照 | DONE | 4b406f92f39b0851101da7b318df4ada01e5f814 | 专项24/24；全量344：343通过/1原平台跳过；check all与doctor --offline退出0 | 无本轮未闭合缺陷；运行链后续接入另按R02—R05验收 |
 | R02 | 触发/账本 | DONE | 原实现7257e07；兼容补充ef4ce45cbab272dcb4a4e9724850d691919dd8aa | R02专项50/50；原生全量394：393通过/1平台跳过；check all/doctor退出0 | 无本轮未闭合缺陷；外部账单不保证恰好一次，真实指南应用另按R04验收 |
 | R03 | 只读执行 | DONE | 1bfad1bc14608777f8922ae0f9c6ffb801538827 | 专项29/29；真实入口6步离线验收；全量423：422通过/1原平台跳过；check all与doctor退出0 | 按附录仅完成Fake离线验收；真实OS隔离未认证，Codex后端阻断，不可真实上线 |
-| R04 | 指南应用 | TODO | — | — | — |
+| R04 | 指南应用 | DONE | 03cb2c2812ca0263fccff42596db893a01b921ab | 专项28/28及门禁补充1项通过；真实入口10步；全量451：450通过/1原平台跳过；旧项目prompt逐字一致 | 真实Codex后端仍阻断；Fake只限临时样例；watch自动消费/应用另按R05验收 |
 | R05 | 监督集成 | TODO | — | — | — |
 | R06 | 图谱投影 | TODO | — | — | — |
 | R07 | 原文溯源 | TODO | — | — | — |
@@ -130,3 +130,46 @@ Fake仅传输测试，不能作为后续自动指南应用依据；实际运行�
 说明见 ../SUPERVISION_R03_EXECUTOR.md，交付证据位于本次会话 outputs/R03/。
 本轮未渲染或应用ACTIVE_GUIDE，没有自动接入watch消费；R04、R05保持TODO。
 R03完成后停止，没有推送。
+
+
+## R04 指南事务、OpenSource参考与本地提交回执（2026-10-16）
+
+先核对R03的1bfad1b/725f683回执和实际队列：三个个人项目没有待恢复回执或
+未知结果事件。按00_INDEX读取共同约束、R04指南应用规格及对应OpenSource附录，
+仅导入本轮附录，没有改写先前契约或历史追踪。
+实现提交 `03cb2c2812ca0263fccff42596db893a01b921ab`（Add transactional supervision guides and protected prompt loading）。
+
+- `python -B -m unittest discover -s tests -p test_supervision_guide.py -v`：
+  28项全部通过，163.993秒，退出0。最后补强临时标记撤销后的拒绝重放，
+  `... -k fake_rejected -v` 1项通过，7.638秒；最终全量包含该补强。
+- `python -B scripts/verify_r04_offline.py --output <本地证据目录>`：真实Windows
+  research.cmd的10步临时样例验收通过。包括预览不写、CAS应用、重复重放、实际prompt
+  只注入一次、精确回滚、原生子进程在replace后被强制终止、重启补回执且不再次写指南。
+  provider_requests=0，指南操作前后原监督成本账本逐字节一致。
+- `python -B -m unittest discover -s tests -v`：451项，484.889秒，退出0；
+  450通过，1个原有POSIX平台用例在Windows跳过，R04专项没有跳过。
+- `python -B research.py check all`三个项目通过；research.cmd doctor --offline、
+  supervise pending --dry-run、executor-info均退出0；diff --check通过。
+- 三个实际项目只读build_prompt与R03版本逐字一致；只保存提示哈希/长度，未修改原文件。
+- 全量回归后843个个人项目、私有配置、状态和日志文件（含已有缓存）的路径及SHA-256
+  与开发前完全一致。R01 schema/快照/配置/专项，以及R03执行器和原成本恢复源码
+  保持原字节。GOAL、AGENTS、continue、STATE、预算、历史、门禁、证明等级均未变。
+
+原R02不可变回执、hash-chain见证、路径安全和route/core/queue锁顺序直接复用。
+指南状态单独投影APPLIED，原成本reservation保持PROPOSED，不写第二份成本账本。
+新增模块采用supervision_guide.py以避免覆盖旧supervision.py；旧rollback --id兼容保留。
+计划保存完整旧/新字节、diff及来源绑定，失败恢复只识别原旧/新SHA；第三种版本拒绝覆盖。
+来源过期撤销未提交指南，回滚后原事件不生成第二版。安全inputs要求冻结覆盖，未捕获的
+新约束不能被默默忽略；主张状态复核只读，不能升级科学结论。
+
+OpenSource附录已实际纳入设计参考：ARA固定上游
+`e52a925e9d03b4ada3008653e72f99b04116fca2`，许可证MIT（2026 Orchestra Research）。
+参考research-manager的Layer Mutability、Edit procedure、Provenance for revisions，
+及rigor-reviewer的Evidence Relevance、Falsifiability Quality、Scope Calibration。
+具体URL、许可证/来源SHA-256和本地适配测试映射见 ../SUPERVISION_R04_GUIDES.md
+及本次outputs/R04/opensource-reference.json。仅只读核验来源，没有复制、安装或执行外部系统。
+
+本轮真实Codex后端继续阻断；Fake只在注册的临时合成控制器/项目应用，无生产放行开关。
+科研代理对supervision/的新增、修改、删除由原ProjectTransaction识别并恢复；普通read_order
+不能重复加载或绕过指南校验。没有真实付费科研/监督调用，没有推送。
+最终回执和正常/故障证据位于本次会话outputs/R04/。本轮结束，R05保持TODO，未自行进入。
