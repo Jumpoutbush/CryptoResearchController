@@ -360,6 +360,12 @@ def command_supervision(args):
     """Controller-only supervisor operations; preview/status never call a model."""
     import supervision
     action = args.supervision_command
+    if action == "pending":
+        import supervision_scheduler
+        selected = projects() if not args.project or args.project == 'all' else [resolve_project(args.project)]
+        for project in selected:
+            print_json({'project': project_id(project), 'event_queue': supervision_scheduler.pending(ROOT, project)})
+        return 0
     if args.project == "all" and action not in {"status", "history", "configure"}:
         raise ValueError("监督 run/show/rollback 必须指定一个项目；all 仅支持 status/history/configure。")
     selected = projects() if args.project == "all" or (action in {"status", "history"} and not args.project) else [resolve_project(args.project)]
@@ -859,8 +865,8 @@ def parser():
     version = (Path(__file__).resolve().parent / "VERSION").read_text(encoding="utf-8-sig").strip()
     p.add_argument("--version", action="version", version="CryptoResearchController " + version)
     sub = p.add_subparsers(dest="command", required=True)
-    def command(name, function, help_text):
-        c = sub.add_parser(name, help=help_text)
+    def command(name, function, help_text, **kwargs):
+        c = sub.add_parser(name, help=help_text, **kwargs)
         c.set_defaults(function=function)
         return c
     command("list", command_list, "列出研究项目")
@@ -895,9 +901,9 @@ def parser():
     c.add_argument("--web-search", choices=("live", "cached", "disabled"))
     c.add_argument("--pdf-download", choices=("on", "off"))
     c.add_argument("--pdf-limit", type=int); c.add_argument("--pdf-max-mb", type=int)
-    c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督")
+    c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督", aliases=['supervise'])
     supervision_sub = c.add_subparsers(dest="supervision_command", required=True)
-    for action in ("status", "history", "show", "configure", "run", "rollback"):
+    for action in ("status", "pending", "history", "show", "configure", "run", "rollback"):
         supervisor = supervision_sub.add_parser(action)
         add_project(supervisor)
         if action == "configure":
@@ -906,6 +912,8 @@ def parser():
                 supervisor.add_argument("--" + field, type=int)
             supervisor.add_argument("--model", help="独立监督模型；inherit 沿用 critical 模型")
             supervisor.add_argument("--effort", choices=("inherit", *EFFORTS))
+        elif action == "pending":
+            supervisor.add_argument('--dry-run', action='store_true', help='只读显示R02事件待办；不落盘或调用模型')
         elif action == "run":
             supervisor.add_argument("--dry-run", action="store_true", help="只读显示状态，不执行监督模型")
             supervisor.add_argument("--force", action="store_true", help="显式触发当前快照监督，仍遵守独立预算和幂等约束")

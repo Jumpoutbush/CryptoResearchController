@@ -10,6 +10,13 @@
 
 ## 7.1 监督事件（v3.3）
 
+R02 本地持久化使用 `state/supervision/<id>/event_queue/`：不可变文件封装
+`schema_version/event/snapshot/context/payload_sha256`，内部 event 保持以下 R01 契约。
+状态由同一原监督成本账本的 `event_reservations` 投影，不覆写冻结的 QUEUED 输入。
+追加式 `events.jsonl` 保存带摘要链的操作；延期记录独立冻结，合法复评后合并。
+复评 run 放在 context，trigger_run_id 始终为已计数的科学 run。详见
+`docs/SUPERVISION_R02_EVENTS.md`；本轮不消费模型或应用指南。
+
 ```json
 {
   "schema_version": 1,

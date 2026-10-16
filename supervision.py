@@ -232,7 +232,9 @@ def status(controller, project, ledger=None):
     epoch = _epoch(route)
     budget_reason = ('budget_exhausted'
                      if epoch and epoch.get('effective_rounds', 0) >= total_budget(epoch, route_policy) else None)
+    from supervision_scheduler import pending as queue_pending
     return {'policy': policy, 'enrolled': data is not None,
+            'event_queue': queue_pending(controller, project),
             'accepted_rounds_since_enrollment': len([r for r in accepted if r not in baseline]),
             'attempts_used': data['attempts_used'] if data else 0,
             'seconds_used': data['seconds_used'] if data else 0,
@@ -631,6 +633,12 @@ def _apply(controller, project, data, proposal, request, attempt_dir, triggers):
 def maybe_supervise(controller, project, ledger, *, budget_reason=None, force=False):
     """Called under runner's route lock, before work and after accepted work."""
     controller, project = Path(controller).resolve(), Path(project).resolve()
+    from supervision_scheduler import enabled, record_manual, before_run
+    if enabled(controller, project):
+        if force: return record_manual(controller, project, route_lock_held=True)
+        epoch = _epoch(ledger)
+        return before_run(controller, project, ledger, epoch,
+            review_required=bool(epoch.get('review_pending') or budget_reason), route_lock_held=True)
     policy = policy_for(controller, project)
     existing = _load(controller, project)
     if not policy['enabled'] and not (existing and existing.get('pending_transaction')):

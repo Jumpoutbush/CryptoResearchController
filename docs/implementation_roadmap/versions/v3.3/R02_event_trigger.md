@@ -1,6 +1,11 @@
 # v3.3 · 开发轮次 R02：监督触发器、独立预算与去重
 
-> **执行状态：待开发（计划文件）**。本文是交给 Codex 的实施规格，并非已完成的功能说明。
+> **本地执行状态：IN_PROGRESS**（2026-10-16）。进入最终回归，尚未填写验收提交。
+> 兼容已有 `supervision.py`，实际新增 `supervision_scheduler.py/supervision_ledger.py`；
+> 不可变输入与追加日志在原监督目录的 `event_queue/`，成本仍在原 `ledger.json`。
+> 新全局开关默认关闭，并保留原项目策略和预算；开启新协议时仅排队，不调用旧执行器。
+> wrapper 传入本次已解析路线策略，保留临时 CLI 覆盖；其他入口复用原持久策略。
+> 接口、恢复规则与离线证据见 [R02 实现说明](../../../SUPERVISION_R02_EVENTS.md)。
 > **基准：** `Jumpoutbush/CryptoResearchController@67618536ecd172b2fad24843daf291489e226c2e`；执行前以本机较新、已提交的源代码为准。
 > **轮次类型：** 软件开发轮次；不得消耗任何个人科研项目的研究预算。
 

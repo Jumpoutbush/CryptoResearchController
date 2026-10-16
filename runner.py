@@ -348,12 +348,26 @@ def supervise_safely(project: Path, ledger: dict, epoch: dict, policy: dict) -> 
     # supervisor creates its own attempt. They still block the next model call,
     # while an already accepted research round retains its accepted status.
     try:
+        from supervision_scheduler import enabled, before_run
+        if enabled(HERE, project):
+            return before_run(HERE, project, ledger, epoch,
+                review_required=bool(needs_review(epoch, policy)), route_lock_held=True, effective_route_policy=policy)
         from supervision import maybe_supervise
         return maybe_supervise(HERE, project, ledger,
             budget_reason=('budget_exhausted'
                            if epoch['effective_rounds'] >= total_budget(epoch, policy) else None))
     except Exception as exc:
         print('SUPERVISION_ERROR:', str(exc), file=sys.stderr, flush=True)
+        return {'status': 'failed', 'proceed': False, 'error': str(exc)}
+
+
+def queue_supervision_after_accept(project, ledger, epoch, policy, run_id, *, reviewed):
+    try:
+        from supervision_scheduler import record_postaccept
+        return record_postaccept(HERE, project, ledger, epoch, run_id, reviewed=reviewed,
+            review_required=bool(needs_review(epoch, policy)), route_lock_held=True, effective_route_policy=policy)
+    except Exception as exc:
+        print('SUPERVISION_QUEUE_ERROR:', str(exc), file=sys.stderr, flush=True)
         return {'status': 'failed', 'proceed': False, 'error': str(exc)}
 
 
@@ -465,6 +479,10 @@ def advance_one(project: Path, policy: dict, ledger_path: Path, ledger: dict,
         if before.get('initialization_required'):
             __import__('engine.initialization', fromlist=['finalize']).finalize(project, after['last_run'])
         discovery.finalize_wrapper(project, True, after['last_run'])
+        queued = queue_supervision_after_accept(project, ledger, epoch, policy, after['last_run'], reviewed=reviewing)
+        if queued['status'] == 'failed':
+            finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], supervision_result=queued)
+            return 3, 'SUPERVISION_QUEUE_FAILED'
         knowledge = refresh_knowledge(project)
         if knowledge['status'] == 'failed':
             finish_status(project, accepted=True, outcome=outcome, run_id=after['last_run'], knowledge_result=knowledge)
