@@ -13,7 +13,7 @@
 | R07 | 原文溯源 | DONE | baebc92cc412e1cacac173f1540b04e7b11308c4 | 专项24/24；双项目原生入口33步；全量522：521通过/1原平台跳过；check all/doctor退出0 | 定理页、原PDF/提取/审查/主张pin已绑定；未核查位置及排版不作为决定性覆盖；真实监督仍阻断 |
 | R08 | 失效事件 | DONE | c7ae0209231670707db4e4af378fd02e19debfc2 | 专项24/24；原生入口32步含进程终止恢复；全量546：545通过/1原平台跳过；check all/doctor退出0 | 原主张图仍唯一权威；本地链无外部防删除锚；R09及以后未进入；真实监督仍阻断 |
 | R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 专项25/25；原生入口40步；全量571：570通过/1原平台跳过；check all/doctor退出0 | 默认关闭；坏依赖检索拒绝；F01—F07剩余及R08契约差异见审查待办；R10待进入 |
-| R10 | 跨项目记忆 | TODO | — | — | — |
+| R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 实际D盘：隔离23/23+闭环4/4；原生入口30步；全量598：597通过/1原平台跳过；实际三项目check all通过 | 已应用D盘；F01—F07剩余及R08契约差异未闭合；停在R10 |
 | R11 | 候选模型 | TODO | — | — | — |
 | R12 | 搜索预算 | TODO | — | — | — |
 | R13 | 数学核验适配器 | TODO | — | — | — |
@@ -324,3 +324,52 @@ F01旧监督入口尚待修复，不能将新门禁结论扩展到整个软件�
 PaperQA2 固定57e89f7223b0960d5ee5ea048c69e3c47e088572（Apache-2.0），
 只借鉴召回/排序/证据阶段分离，未复制安装运行；精确来源见opensource-reference.json。
 完整命令、正常与故障上下文、文件清单和补丁在本目录；R09回执提交后才进入R10。
+
+## R10 本地验收回执（2026-10-16）
+
+R10 本地离线开发验收完成（2026-10-16）
+实现提交：04ab51498e87aebd9c9c617361c8669ee91e2123
+先验收并提交 R09 17c7ba7/d934e19，才读取 R10 规格及对应 OpenSource 附录。
+代码、追踪表及本地提交均已应用到实际 D:\CryptoResearchController。
+此前受限会话未完成的回归日志已保留。权限恢复后，6项Git/目录联接/符号链接用例
+全部通过，再安全同步R09实现与回执，应用R10并在实际D盘重新完成以下验收。
+
+新增双向白名单、源/目标一致的摘要 SHA、目标模型 SHA 固定、公开文本来源核验、
+权限撤销、不读私有来源、命名空间冲突与七维模型映射。输出固定 REFERENCE_ONLY、
+positive_basis=false，始终要求目标项目独立审查。源 owner 预览保留问题与主张假设并集；
+接收方只读显式公开胶囊与文本，绝不调用源项目 derive 或读取 PDF/日志/源码。
+当前私有原文状态明确 NOT_READ_OR_REVALIDATED；只公开源变化可立即核验，私有变化须
+源 owner 复核后重新发布/撤销。相同文本不等于安全等价，静态腐化结果不自动迁入自适应模型。
+默认关闭，不自动注入提示，不写研究状态、claim graph、verified_results、预算或历史。
+
+实际验收命令（以下 cwd 均为实际 D:\CryptoResearchController）：
+python -B -m unittest discover -s tests -p test_cross_project_isolation.py -v
+  23/23通过，31.68秒。
+python -B -m unittest discover -s tests -p test_knowledge_e2e.py -v
+  4/4通过，9.335秒。
+python -B scripts/verify_r10_offline.py --output <本会话外部证据目录>
+  30步实际 Windows research.cmd/受保护 Python 入口；两个纯临时 NTRU 项目；
+  双向许可、私有文件拒读、公共来源过期、撤权不回查缓存、目标模型 pin、重建与 T07-T09。
+python -B -m unittest discover -s tests -v
+  598项，864.834秒；597通过，1项既有 POSIX 平台跳过。
+python -B research.py check all  （实际 D 三个项目通过）
+python -B research.py doctor --offline  （实际三个项目、Python/Git/控制器根核对通过）
+git diff --check
+
+843 个实际个人项目/状态/预算/日志文件路径和 SHA 完全一致；36份其它控制器源码逻辑不变：
+35份保持原字节，configuration.py仅Git检出时转换换行，规范化内容与R09提交及基线一致。
+正常引用 normal-reference.json、反向引用 reverse-reference.json、origin-proof-chain.json、
+公开来源过期 stale-reference.json、撤权 revoked-reference.json、模型 pin 拒绝及修订上下文
+均在 entry-acceptance-final/。实际命令和退出码见 verified-acceptance.json。
+额外交付演练覆盖公开改动备份、固定提交 ff-only、幂等、额外人工编辑、守卫改动拒绝、
+活跃 watch 锁；私有合成文件保持不变。R09通过仅含公共提交的本地bundle同步；
+R10复用既有公共源码更新/备份事务，并在实际D盘完成实现及追踪回执提交。
+
+ARA 固定 e52a925e9d03b4ada3008653e72f99b04116fca2，MIT，具体文件/哈希见 opensource-reference.json。
+只借鉴来源/主张/工件分层；权限、白名单、撤权和映射均为本地 R10 实现；未复制、安装、
+执行上游代码或技能。离线验收零模型/网络请求；没有真实付费科研/监督、Lean执行或推送。
+上游仅做只读来源核对，不属于科研执行。
+R03 新真实执行器继续阻断；旧监督旁路 F01 尚待修复，不能泛称全软件已统一阻断。
+F01-F07 其余修复与 R08 字节恢复契约差异按用户选择登记待办，不擅自改变旧契约。
+v3.4 T07-T09 离线开发闭环通过；不宣称已解决全部审查问题或可付费生产部署。
+完成 R10 后停止，R11-R20 保持 TODO，未进入后续轮次。
