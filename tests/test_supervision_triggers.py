@@ -372,5 +372,38 @@ class SupervisionTriggerTests(unittest.TestCase):
         self.assertTrue(scheduler.claim_event(self.root, self.project, event)['claimed'])
         self.assertEqual(supervision._load(self.root, self.project)['attempts_used'], 1)
 
+    def test_entire_cost_ledger_loss_after_reservation_ack_failure_blocks_reenrollment(self):
+        self.enable(); event = self.record(3)['event_id']
+        append = queue.append
+        def fail_ack(controller, project, kind, key, **details):
+            if kind == 'CALL_RESERVED': raise OSError('After cost commit, before acknowledgement')
+            return append(controller, project, kind, key, **details)
+        with mock.patch.object(queue, 'append', side_effect=fail_ack):
+            with self.assertRaises(OSError): scheduler.claim_event(self.root, self.project, event)
+        path = supervision._home(self.root, self.project) / 'ledger.json'
+        original = path.read_bytes(); path.unlink()
+        with self.assertRaises(ValueError): scheduler.claim_event(self.root, self.project, event)
+        self.assertFalse(path.exists(), 'Missing ledger cannot be re-enrolled as zero cost')
+        path.write_bytes(original)
+        self.assertFalse(scheduler.claim_event(self.root, self.project, event)['claimed'])
+        self.assertEqual(supervision._load(self.root, self.project)['attempts_used'], 1)
+
+    def test_cost_save_interruption_before_dispatch_recovers_same_reservation_intent(self):
+        self.enable(); event = self.record(3)['event_id']
+        supervision.configure(self.root, self.project, {'enabled': True})
+        original = supervision._save
+        def fail_cost(controller, project, data):
+            if data.get('event_reservations'): raise OSError('Before cost commit')
+            return original(controller, project, data)
+        with mock.patch.object(supervision, '_save', side_effect=fail_cost):
+            with self.assertRaises(OSError): scheduler.claim_event(self.root, self.project, event)
+        self.assertEqual(supervision._load(self.root, self.project)['attempts_used'], 0)
+        intents = [op for op in queue.operations(self.root, self.project) if op['type'] == 'RESERVATION_INTENT']
+        self.assertEqual(len(intents), 1)
+        result = scheduler.claim_event(self.root, self.project, event)
+        self.assertTrue(result['claimed'])
+        self.assertEqual(supervision._load(self.root, self.project)['attempts_used'], 1)
+        self.assertEqual(len([op for op in queue.operations(self.root, self.project) if op['type'] == 'RESERVATION_INTENT']), 1)
+
 
 if __name__ == '__main__': unittest.main()

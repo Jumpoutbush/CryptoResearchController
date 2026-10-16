@@ -9,6 +9,7 @@ from __future__ import annotations
 from contextlib import contextmanager, ExitStack
 import copy
 import math
+import os
 from pathlib import Path
 import secrets
 
@@ -209,7 +210,7 @@ def claim_event(controller, project, event_id):
     if not enabled(controller, project): return {'claimed': False, 'reason': 'DISABLED'}
     try:
         with _locks(controller, project, execution=True):
-            record = queue.read_event(controller, project, event_id)
+            record = queue.read_for_claim(controller, project, event_id)
             queue.view(controller, project)  # Validate costs/journal before any reservation.
             guard = _event_guard(controller, project, record)
             if not guard['claim_allowed']:
@@ -218,15 +219,38 @@ def claim_event(controller, project, event_id):
             data, reserved = queue.reservations(controller, project)
             if event_id in reserved:
                 _ack_reservation(controller, project, reserved[event_id])
+                if reserved[event_id].get('dispatch') and reserved[event_id]['state'] == 'RUNNING':
+                    from supervision_calls import recovery_info
+                    phase = recovery_info(controller, project, event_id, reserved[event_id])['call_phase']
+                    return {'claimed': False, 'reason': ('COMPLETION_REPLAY_REQUIRED' if phase == 'CALL_COMPLETED' else phase),
+                            'state': 'RUNNING', 'operator_audit_required': phase != 'CALL_COMPLETED'}
                 return {'claimed': False, 'reason': 'ALREADY_RESERVED', 'state': reserved[event_id]['state']}
             policy = supervision.policy_for(controller, project)
-            if data is None: data = supervision._enroll(controller, project)
+            if data is None:
+                data = supervision._enroll(controller, project)
+                supervision._save(controller, project, data)  # Persist zero-cost baseline before intent.
             remaining = int(policy['max_total_seconds'] - data['seconds_used'])
             if data['attempts_used'] >= policy['max_reviews'] or remaining < 1:
                 return {'claimed': False, 'reason': 'BUDGET_EXHAUSTED'}
             token, seconds = secrets.token_hex(32), min(policy['max_seconds'], remaining)
             reservation = {'event_id': event_id, 'state': 'RUNNING', 'claim_token': token,
                 'reserved_seconds': seconds, 'started_utc': stamp(), 'call_count': 1}
+            critical = configuration.settings_for(project)['model_policy']['critical']
+            reservation.update(owner_pid=os.getpid(), owner_instance=token, call_generation=1,
+                event_payload_sha256=record['payload_sha256'], input_snapshot_sha256=record['snapshot']['input_snapshot_sha256'],
+                model_route={'model': policy['model'] or critical['model'], 'effort': policy['effort'] or critical['effort']})
+            unfinished = [op for op in queue.operations(controller, project)
+                          if op['type'] == 'RESERVATION_INTENT' and op['id'] not in reserved]
+            if any(op['id'] != event_id for op in unfinished):
+                return {'claimed': False, 'reason': 'PENDING_RESERVATION_INTENT'}
+            if unfinished:
+                reservation = copy.deepcopy(unfinished[0]['details']['reservation'])
+                token, seconds = reservation['claim_token'], reservation['reserved_seconds']
+                if seconds > remaining or seconds > policy['max_seconds']:
+                    return {'claimed': False, 'reason': 'INTENT_POLICY_CHANGED'}
+            else:
+                queue.append(controller, project, 'RESERVATION_INTENT', event_id,
+                    baseline_sha256=canonical_hash(data), reservation=reservation)
             data.setdefault('event_reservations', {})[event_id] = reservation
             data['attempts_used'] += 1; data['seconds_used'] += seconds
             data['events'].append({'type': 'CALL_RESERVED', 'event_id': event_id, 'at': stamp(), 'reserved_seconds': seconds})
@@ -265,6 +289,12 @@ def finish_claim(controller, project, event_id, claim_token, *, state, elapsed_s
         data, reservations = queue.reservations(controller, project)
         reservation = reservations.get(event_id)
         if reservation is None or reservation['claim_token'] != claim_token: raise ValueError('No matching event claim token')
+        if reservation.get('dispatch'):
+            from supervision_calls import _read_completion
+            receipt = _read_completion(controller, project, event_id, reservation)
+            if receipt is None: raise ValueError('UNKNOWN_EXTERNAL_OUTCOME: cannot release dispatched cost without the original completion receipt')
+            if receipt['state'] != state or receipt['elapsed_seconds'] != elapsed_seconds:
+                raise ValueError('Settlement differs from the original completion receipt')
         if reservation['state'] != 'RUNNING':
             if reservation['state'] != state: raise ValueError('Claim already completed with another outcome')
             if reservation['elapsed_seconds'] != elapsed_seconds: raise ValueError('Completed cost receipt differs')

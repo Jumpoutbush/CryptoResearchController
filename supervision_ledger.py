@@ -19,7 +19,8 @@ from route_budget import stamp
 
 HEX = re.compile(r'^[0-9a-f]{64}$')
 OPS = {'EVENT_QUEUED', 'EVENT_RECOVERED', 'DEFERRED_TO_ROUTE_REVIEW', 'DEFERRAL_RESOLVED',
-       'DEFERRAL_CONFLICT', 'CALL_RESERVED', 'CLAIM_FINISHED', 'CLAIM_BLOCKED', 'LOCK_CONFLICT'}
+       'DEFERRAL_CONFLICT', 'CALL_RESERVED', 'CLAIM_FINISHED', 'CLAIM_BLOCKED', 'LOCK_CONFLICT',
+       'RESERVATION_INTENT', 'CALL_DISPATCHED', 'CALL_COMPLETED', 'BLOCKED_MISSING_FROZEN_INPUT'}
 
 
 def home(controller, project):
@@ -99,8 +100,7 @@ def enqueue(controller, project, event, snapshot, context):
     # An acknowledged input is never rebuilt from newer scientific sources.
     log = operations(controller, project)
     acknowledged = [op for op in log if op['id'] == event_id and op['type'] in {'EVENT_QUEUED', 'EVENT_RECOVERED'}]
-    if acknowledged and not _event_path(controller, project, event_id).exists():
-        raise ValueError('Acknowledged immutable event input is missing; restore the original backup')
+    if acknowledged: read_for_claim(controller, project, event_id)
     _write_immutable(_event_path(controller, project, event_id),
         {'schema_version': 1, 'event': event, 'snapshot': snapshot, 'context': context})
     saved = read_event(controller, project, event_id)
@@ -147,6 +147,20 @@ def reservations(controller, project):
     data = supervision._load(controller, project)
     result = data.get('event_reservations', {}) if data else {}
     if not isinstance(result, dict): raise ValueError('Invalid shared supervision reservation ledger')
+    # This is a write-ahead witness, not another balance. Missing cost evidence
+    # must never be interpreted as a fresh zero-cost enrollment.
+    for op in operations(controller, project):
+        if op['type'] == 'RESERVATION_INTENT' and op['id'] in result:
+            initial = op['details']['reservation']
+            if any(result[op['id']].get(k) != v for k, v in initial.items() if k != 'state'):
+                raise ValueError('Reservation identity or frozen model route differs from its intent')
+        if op['type'] == 'RESERVATION_INTENT' and op['id'] not in result:
+            if data is None or canonical_hash(data) != op['details']['baseline_sha256']:
+                raise ValueError('Missing or ambiguous shared cost ledger; restore the original ledger before recovery')
+        if op['type'] == 'CALL_DISPATCHED':
+            dispatch = result.get(op['id'], {}).get('dispatch')
+            if dispatch is None or canonical_hash(dispatch) != op['details'].get('dispatch_sha256'):
+                raise ValueError('Dispatch witness conflicts with the shared ledger; automatic redispatch is forbidden')
     for key, record in result.items():
         if (not HEX.fullmatch(key) or not isinstance(record, dict) or record.get('event_id') != key
                 or record.get('state') not in {'RUNNING', 'PROPOSED', 'FAILED', 'REJECTED', 'CONFLICT'}
@@ -166,6 +180,42 @@ def reservations(controller, project):
                 or not math.isfinite(data['seconds_used']) or data['seconds_used'] + 1e-6 < total):
             raise ValueError('Shared supervision costs conflict with event reservations')
     return data, result
+
+
+def read_for_claim(controller, project, event_id):
+    """Mutating caller holds queue lock; queries still use read_event only."""
+    required = {'GOAL.md', 'PROJECT.json', 'research/STATE.json'}
+    try:
+        record = read_event(controller, project, event_id)
+        if record['event']['focus']['selected_idea'] is not None:
+            required |= {s['path'] for s in record['snapshot']['source_manifest'] if s['path'].startswith('ideas/')}
+        for relative in sorted(required):
+            source = next((s for s in record['snapshot']['source_manifest']
+                           if s['scope'] == 'PROJECT' and s['path'] == relative), None)
+            if source is None or source['truncated'] or not source['captured_bytes']:
+                raise ValueError('Required frozen source is unavailable: ' + relative)
+        return record
+    except (ValueError, OSError) as exc:
+        prior = next((op for op in operations(controller, project) if op['id'] == event_id
+                      and op['type'] in {'EVENT_QUEUED', 'EVENT_RECOVERED'}), None)
+        diagnostic = {'path': 'event_queue/events/' + event_id + '.json',
+            'expected_sha256': prior['details'].get('payload_sha256') if prior else None,
+            'hash_scope': 'immutable_payload', 'reason': type(exc).__name__}
+        try:
+            raw = configuration.load_json(_event_path(controller, project, event_id))
+            snapshot = raw['snapshot']
+            if raw['event']['focus']['selected_idea'] is not None:
+                required |= {s['path'] for s in snapshot['source_manifest'] if s['scope'] == 'PROJECT' and s['path'].startswith('ideas/')}
+            for source in snapshot['source_manifest']:
+                if source['scope'] != 'PROJECT' or source['path'] not in required: continue
+                body = next((b for b in snapshot['sources'] if b['scope'] == 'PROJECT' and b['path'] == source['path']), None)
+                if (source['truncated'] or body is None
+                        or supervision._hash(body['content'].encode('utf8')) != source['sha256']):
+                    diagnostic.update(path=source['path'], expected_sha256=source['sha256'], hash_scope='frozen_source')
+                    break
+        except (ValueError, OSError, KeyError, TypeError): pass  # Never rebuild or read live project evidence.
+        append(controller, project, 'BLOCKED_MISSING_FROZEN_INPUT', event_id, **diagnostic)
+        raise
 
 
 def view(controller, project):
@@ -192,6 +242,9 @@ def view(controller, project):
                 saved and saved['state'] != 'RUNNING' and not any(
                     op['id'] == path.stem and op['type'] == 'CLAIM_FINISHED' for op in log)),
             'context': copy.deepcopy(record['context'])})
+        from supervision_calls import recovery_info
+        result[-1].update(recovery_info(controller, project, path.stem, saved))
+        result[-1]['recovery_required'] |= bool(result[-1].get('completion_replay_required') or result[-1].get('operator_audit_required'))
     for key in reserved:
         if not any(item['event_id'] == key for item in result):
             raise ValueError('Reserved event input is missing; refusing to recreate a free call')
