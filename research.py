@@ -360,6 +360,20 @@ def command_supervision(args):
     """Controller-only supervisor operations; preview/status never call a model."""
     import supervision
     action = args.supervision_command
+    if action == 'executor-info':
+        from supervision_executor import inspect_cli
+        print_json(inspect_cli())
+        return 0
+    if action == 'execute':
+        from supervision_executor import execute, FakeSupervisorExecutor, CodexSupervisorExecutor
+        if not args.project or args.project == 'all':
+            raise ValueError('R03 execute requires exactly one project and one frozen event.')
+        executor = CodexSupervisorExecutor() if args.executor == 'codex' else FakeSupervisorExecutor()
+        result = execute(ROOT, resolve_project(args.project), args.event_id,
+                         executor=executor, dry_run=args.dry_run)
+        print_json(result)
+        return 0 if ((result.get('state') == 'PROPOSED' and result['status'] == 'COMPLETED')
+                     or result['status'] == 'DRY_RUN') else 2
     if action == "pending":
         import supervision_scheduler
         selected = projects() if not args.project or args.project == 'all' else [resolve_project(args.project)]
@@ -903,9 +917,9 @@ def parser():
     c.add_argument("--pdf-limit", type=int); c.add_argument("--pdf-max-mb", type=int)
     c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督", aliases=['supervise'])
     supervision_sub = c.add_subparsers(dest="supervision_command", required=True)
-    for action in ("status", "pending", "history", "show", "configure", "run", "rollback"):
+    for action in ("status", "pending", "history", "show", "configure", "run", "rollback", "execute", "executor-info"):
         supervisor = supervision_sub.add_parser(action)
-        add_project(supervisor)
+        if action != 'executor-info': add_project(supervisor)
         if action == "configure":
             supervisor.add_argument("--enabled", choices=("on", "off"))
             for field in ("interval", "max-reviews", "max-attempts-per-review", "max-seconds", "max-total-seconds"):
@@ -914,6 +928,11 @@ def parser():
             supervisor.add_argument("--effort", choices=("inherit", *EFFORTS))
         elif action == "pending":
             supervisor.add_argument('--dry-run', action='store_true', help='只读显示R02事件待办；不落盘或调用模型')
+        elif action == 'execute':
+            supervisor.add_argument('--event-id', required=True, help='R02队列中的冻结事件ID；不会创建新事件')
+            supervisor.add_argument('--executor', choices=('fake', 'codex'), default='fake',
+                                    help='默认离线假代理；codex须通过OS隔离验证，否则拒绝且不预留预算')
+            supervisor.add_argument('--dry-run', action='store_true', help='只读预览；不创建工作区/预留/派发')
         elif action == "run":
             supervisor.add_argument("--dry-run", action="store_true", help="只读显示状态，不执行监督模型")
             supervisor.add_argument("--force", action="store_true", help="显式触发当前快照监督，仍遵守独立预算和幂等约束")

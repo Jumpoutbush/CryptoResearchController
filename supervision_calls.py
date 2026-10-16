@@ -105,7 +105,8 @@ def mark_dispatched(controller, project, event_id, claim_token, *, argv):
         return {'dispatch_allowed': True, 'event_id': event_id, 'model_route': saved['model_route']}
 
 
-def save_completion(controller, project, event_id, claim_token, *, state, elapsed_seconds, raw_output, log):
+def save_completion(controller, project, event_id, claim_token, *, state, elapsed_seconds, raw_output, log,
+                    acceptance_guard=None):
     """Persist bounded, untrusted result bytes before settling local costs."""
     from supervision_scheduler import _locks
     if state not in {'PROPOSED', 'FAILED', 'REJECTED', 'CONFLICT'}:
@@ -117,6 +118,10 @@ def save_completion(controller, project, event_id, claim_token, *, state, elapse
         queue.view(controller, project)
         _, _, saved = _bound(controller, project, event_id, claim_token)
         if not saved.get('dispatch'): raise ValueError('No durable dispatch fence')
+        # R03 advisory acceptance is checked under the same original locks as
+        # the durable receipt. Existing R02 callers keep identical semantics.
+        if state == 'PROPOSED' and acceptance_guard is not None and not acceptance_guard():
+            state = 'CONFLICT'
         payload = {'schema_version': 1, 'event_id': event_id, 'claim_token_sha256': canonical_hash(claim_token),
             'event_payload_sha256': saved['event_payload_sha256'], 'input_snapshot_sha256': saved['input_snapshot_sha256'],
             'dispatch_sha256': canonical_hash(saved['dispatch']), 'state': state, 'elapsed_seconds': elapsed_seconds,
