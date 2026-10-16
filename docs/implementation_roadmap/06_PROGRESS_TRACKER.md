@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- | --- |
 | R01 | 监督契约/快照 | DONE | 4b406f92f39b0851101da7b318df4ada01e5f814 | 专项24/24；全量344：343通过/1原平台跳过；check all与doctor --offline退出0 | 无本轮未闭合缺陷；运行链后续接入另按R02—R05验收 |
 | R02 | 触发/账本 | DONE | 原实现7257e07；兼容补充ef4ce45cbab272dcb4a4e9724850d691919dd8aa | R02专项50/50；原生全量394：393通过/1平台跳过；check all/doctor退出0 | 无本轮未闭合缺陷；外部账单不保证恰好一次，真实指南应用另按R04验收 |
-| R03 | 只读执行 | TODO | — | — | — |
+| R03 | 只读执行 | DONE | 1bfad1bc14608777f8922ae0f9c6ffb801538827 | 专项29/29；真实入口6步离线验收；全量423：422通过/1原平台跳过；check all与doctor退出0 | 按附录仅完成Fake离线验收；真实OS隔离未认证，Codex后端阻断，不可真实上线 |
 | R04 | 指南应用 | TODO | — | — | — |
 | R05 | 监督集成 | TODO | — | — | — |
 | R06 | 图谱投影 | TODO | — | — | — |
@@ -94,3 +94,39 @@ R03 仍为 TODO，不能将旧版相似执行器直接算作 R03 已验收。
 R03进入条件：本轮代码与测试提交有回执；R01冻结；旧账本和活动尝试保留；
 未知外部结果必须审计、不能自动重试；另按R03规格验证隔离只读执行器及真实CLI参数。
 本次停止在R02，R03保持TODO。没有真实付费科研/监督轮次，也未推送。
+
+
+## R03 离线验收与本地提交回执（2026-10-16）
+
+先按 00_INDEX 核对 R02 提交回执及三个实际项目 pending：均无待恢复完成回执、
+无 UNKNOWN_EXTERNAL_OUTCOME，原开关和余额保持不变。读取当前 R03 规格与升级
+附录，并仅导入对应 R03 附录和共用沙箱安全文档，未覆盖旧追踪表或 R01/R02 记录。
+实现提交 `1bfad1bc14608777f8922ae0f9c6ffb801538827`（Add bounded supervision executor and offline acceptance）。
+
+- `python -B -m unittest discover -s tests -p test_supervision_executor.py -v`：
+  29项全部通过，70.771秒，退出0；全部无模型调用。
+- `python -B scripts/verify_r03_offline.py --output <本地证据目录>`：实际 Windows
+  research.cmd 的6步合成项目验收通过；成功、幂等重放、dry-run、真实模式阻断、
+  两次未知结果拒绝重派均有JSON与退出码证据，provider_requests=0。
+- `python -B -m unittest discover -s tests -v`：423项，314.113秒，退出0；
+  422通过、1个既有POSIX平台用例跳过，R03新增专项无跳过。
+  全量包含更新后的根入口/新项目模板失败退出码回归及原R01/R02全部测试。
+- `python -B research.py check all` 三个项目通过；原生 research.cmd doctor --offline、
+  research.cmd supervise pending --dry-run 和 executor-info 均退出0；diff --check通过。
+- 841个非缓存个人项目、配置、状态及日志文件的路径集合和SHA-256与开发前完全一致。
+  R01契约、快照、默认配置、专项及说明与R01提交原字节一致；没有改变任何
+  GOAL、STATE、预算、历史、门禁、证明等级或科研会话。
+
+使用 supervision_executor.py 避免 supervision/ 包覆盖旧 supervision.py；schema直接
+复用R01。原R02成本与恢复机制不重做，仅为save_completion添加默认行为不变的
+可选锁内acceptance_guard。派发后无回执不退款、不重派；旧完成回执先恢复原记账，
+不升级为R03接收；当前绑定变化不返回可用提案。Windows Job仅收束进程生命周期。
+
+本轮DONE严格指附录允许的Fake离线验收路径。CLI 0.162.1参数兼容已实测，
+OS层跨项目/凭据拒读与工具网络隔离尚未认证；真实backend固定阻断，未声称真实
+沙箱通过。没有安装外部框架、提权或改变全局CLI配置，没有真实付费科研/监督调用。
+Fake仅传输测试，不能作为后续自动指南应用依据；实际运行需另有已认证OS适配器。
+
+说明见 ../SUPERVISION_R03_EXECUTOR.md，交付证据位于本次会话 outputs/R03/。
+本轮未渲染或应用ACTIVE_GUIDE，没有自动接入watch消费；R04、R05保持TODO。
+R03完成后停止，没有推送。
