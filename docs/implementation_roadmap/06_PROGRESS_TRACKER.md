@@ -12,7 +12,7 @@
 | R06 | 图谱投影 | DONE | a5785130a7816c6739899e37afac9ec504ea2e2c | 专项27/27；双项目原生入口24步；全量498：497通过/1原平台跳过；check all/doctor退出0 | 本轮只读投影已验收；原文页码/失效事件/检索/跨项目复用另按R07—R10；真实监督后端门禁未变 |
 | R07 | 原文溯源 | DONE | baebc92cc412e1cacac173f1540b04e7b11308c4 | 专项24/24；双项目原生入口33步；全量522：521通过/1原平台跳过；check all/doctor退出0 | 定理页、原PDF/提取/审查/主张pin已绑定；未核查位置及排版不作为决定性覆盖；真实监督仍阻断 |
 | R08 | 失效事件 | DONE | c7ae0209231670707db4e4af378fd02e19debfc2 | 专项24/24；原生入口32步含进程终止恢复；全量546：545通过/1原平台跳过；check all/doctor退出0 | 原主张图仍唯一权威；本地链无外部防删除锚；R09及以后未进入；真实监督仍阻断 |
-| R09 | 证据检索 | TODO | — | — | — |
+| R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 专项25/25；原生入口40步；全量571：570通过/1原平台跳过；check all/doctor退出0 | 默认关闭；坏依赖检索拒绝；F01—F07剩余及R08契约差异见审查待办；R10待进入 |
 | R10 | 跨项目记忆 | TODO | — | — | — |
 | R11 | 候选模型 | TODO | — | — | — |
 | R12 | 搜索预算 | TODO | — | — | — |
@@ -288,3 +288,39 @@ ARA固定e52a925e9d03b4ada3008653e72f99b04116fca2（MIT），只借鉴typed依�
 回执/实际命令/正常及故障子图/完整历史证据在会话outputs/R08/。
 真实Codex监督后端继续阻断；无真实付费科研/监督调用，无推送。
 R08验收后停止。R09—R20保持TODO，不宣称整个v3.4或v4.0已发布。
+
+## R09 本地验收回执（2026-10-16）
+
+R09 本地验收完成
+实现提交：17c7ba7eae3b419f16a16b6015f32b6a910a35b8
+重连后D盘只读：本轮Git提交与追踪表保存在C盘公开源码副本local-r09-r10分支。
+R09运行时代码已在中断前应用到D并完成下列实际回归；D的HEAD及追踪表待恢复写权限后同步。
+先核对 R08 c7ae020/a0e23e3 回执及既有未知结果记录，再读取当前规格与 OpenSource 附录。
+新增精确问题/版本/义务/主张检索、必要依赖与反例优先、完整出处、32KiB整体预算、
+遗漏清单、当前源清单核对及可选提示注入。默认关闭时与冻结 R08 提示函数逐字节一致。
+保留完整 GOAL/STATE/原安全指令；只读 context 不写缓存、历史、账本或科研文件。
+元数据在图构建后按实际字节核对 manifest，拒绝旧锚点/新图混用。
+
+用户审查意见：只修 R09/R10 直接相关项。新增普通依赖 pin 完整性检索防护，
+坏绑定拒绝整次上下文，不补 pin、不改 canonical。F01—F07 剩余及 R08 字节恢复
+契约差异登记 docs/REVIEW_A0E23E3_FOLLOWUP.md，不宣称全部修复。
+上下文只表示当前权威快照，不补造已丢失的同版本审查历史。
+
+实际命令均以 D:\CryptoResearchController 为 cwd：
+python -B -m unittest discover -s tests -p test_knowledge_retrieval.py -v
+  25/25通过，25.482秒。
+python -B scripts/verify_r09_offline.py --output <本会话外部证据目录>
+  40步实际 Windows research.cmd；正常/预算/注入/PDF丢失/损坏依赖/
+  历史损坏/进程终止恢复；全部按预期退出，provider_requests=0。
+python -B -m unittest discover -s tests -v
+  571项，865.049秒；570通过，1项既有POSIX跳过。
+python -B research.py check all
+python -B research.py doctor --offline
+git diff --check
+
+843个个人项目/状态/预算/日志文件路径/SHA完全一致，33份其它既有控制器源码不变。
+未启用个人项目检索、未运行真实科研/监督/Lean、未推送。R03新真实执行器仍阻断；
+F01旧监督入口尚待修复，不能将新门禁结论扩展到整个软件。
+PaperQA2 固定57e89f7223b0960d5ee5ea048c69e3c47e088572（Apache-2.0），
+只借鉴召回/排序/证据阶段分离，未复制安装运行；精确来源见opensource-reference.json。
+完整命令、正常与故障上下文、文件清单和补丁在本目录；R09回执提交后才进入R10。
