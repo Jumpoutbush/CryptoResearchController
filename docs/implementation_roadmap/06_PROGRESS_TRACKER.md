@@ -14,7 +14,7 @@
 | R08 | 失效事件 | DONE | c7ae0209231670707db4e4af378fd02e19debfc2 | 专项24/24；原生入口32步含进程终止恢复；全量546：545通过/1原平台跳过；check all/doctor退出0 | 原主张图仍唯一权威；本地链无外部防删除锚；R09及以后未进入；真实监督仍阻断 |
 | R09 | 证据检索 | DONE | 17c7ba7eae3b419f16a16b6015f32b6a910a35b8 | 审查修复后原生41步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
 | R10 | 跨项目记忆 | DONE | 04ab51498e87aebd9c9c617361c8669ee91e2123 | 审查修复后原生30步；新增审查83/83；全量681：680通过/1原平台跳过；实际三项目检查通过 | 复验d08a8f8；默认关闭；持久失效重审；真实监督/Lean阻断；R11未进入 |
-| R11 | 候选模型 | TODO | — | — | — |
+| R11 | 候选模型 | DONE | 566612a38bafd37635f1c113c0b2c1e4aea7c8a5 | 专项40/40；真实Windows入口35步；全量721：720通过/1既有平台跳过；check all/doctor通过 | 只登记候选；保守归一化去重；CONDITIONAL不能自动READY；真实监督/Lean阻断 |
 | R12 | 搜索预算 | TODO | — | — | — |
 | R13 | 数学核验适配器 | TODO | — | — | — |
 | R14 | 密码学安全审查 | TODO | — | — | — |
@@ -410,3 +410,35 @@ R10公开来源SHA可核验，私有PDF/claim当前状态不跨项目读取，�
 不能据离线回归声称真实OS隔离已认证、科学结论已证明或原独立报告已改判。
 详见docs/REVIEW_A0E23E3_FOLLOWUP.md及本会话outputs/review-fixes/。
 R09、R10完成并通过本次复验；R11—R20保持TODO，停止后续开发。
+
+## R11 候选目录本地验收回执（2026-10-16）
+
+进入前核对R10的04ab514/24d32d7及审查修复d08a8f8/8b01388，39份回执文件摘要一致，
+实际三个项目监督事件为空，接受事务与发现调用均无待恢复/未知结果。按00_INDEX读取
+共同约束、当前R11和对应OpenSource附录，未提前读取R12—R14规格。
+
+实现提交 `566612a38bafd37635f1c113c0b2c1e4aea7c8a5`：冻结目标、路线纪元和完整安全输入；
+问题精确版本或不可变草案快照；父版本和历史事件；保守科学内容去重；三个活动名额；
+范围化否决与重启条件；READY复用现有主张独立审查状态。模型输入不能直接激活或证明，
+差异模型保持CONDITIONAL，未提供自动放宽目标或独立裁决通道。
+
+实际命令（cwd均为D:\CryptoResearchController）：
+
+- `python -B -m unittest discover -s tests -p test_candidate_*.py -v`：40/40通过，28.074秒，退出0。
+- `python -B scripts/verify_r11_offline.py --output <本会话outputs/R11/entry-final>`：35步真实Windows
+  research.cmd临时样例，正常树/修订留史/第四活跃拒绝/未审定理拒绝/弱化阈值和循环拒绝，退出0。
+  审计钩子拒绝网络和嵌套工具执行；模型、真实监督、Lean执行均0，原科研与预算文件逐字不变。
+- `python -B -m unittest discover -s tests -v`：721项，720通过、1项既有POSIX跳过，
+  961.695秒，退出0。113份公开Python文件在完整执行期间摘要一致。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`通过。
+- 暂存区`git diff --cached --check`通过。全回归后仅删除测试文件EOF多余空行，AST逐字等价，
+  未改生产代码；字节差异单独留在post-test-whitespace.json，不冒充第二次完整回归。
+
+843个个人项目/状态/预算/日志文件路径和SHA完全一致；23份既有监督契约、预算、恢复、
+主张及执行门禁文件保持原字节。LLNL固定c8342c0e28474d134f80caa6b9668470ebf55258，
+AIDE固定1d8ec4026c67729443294c8b5c0907242d0de38c，两者MIT；参考文件、函数和许可证
+全文SHA见CANDIDATES_R11.md及outputs/R11/opensource-reference.json。未复制安装运行上游代码。
+
+详见docs/CANDIDATES_R11.md，本会话outputs/R11包含真实命令、正常及故障JSON、文件清单和摘要。
+本轮不导入固定问题、不开始尝试、不改STATE/权威主张/消费；没有付费调用或推送。
+真实监督与Lean继续阻断。R11回执提交后才进入R12；R15及以后未授权进入。
