@@ -17,7 +17,7 @@
 | R11 | 候选模型 | DONE | 566612a38bafd37635f1c113c0b2c1e4aea7c8a5 | 专项40/40；真实Windows入口35步；全量721：720通过/1既有平台跳过；check all/doctor通过 | 只登记候选；保守归一化去重；CONDITIONAL不能自动READY；真实监督/Lean阻断 |
 | R12 | 搜索预算 | DONE | 2ac1e71d83f138364939d79f9fd3e22cb756c1c0 | 候选专项78/78；真实Windows入口63步；全量759：758通过/1既有平台跳过；check all/doctor通过 | 最多3候选的建议窗口；原预算唯一权威；归属不证明提示注入；真实监督/Lean阻断 |
 | R13 | 数学核验适配器 | DONE | ce0125947d56e20b3b4690d8005017c30567a965 | 专项27/27；真实Windows入口28步；全量786：785通过/1既有平台跳过；check all/doctor通过 | 固定整数worker仅核验机器谓词；Lean静态预检始终阻断；未审自然语义不升级科学等级 |
-| R14 | 密码学安全审查 | TODO | — | — | — |
+| R14 | 密码学安全审查 | DONE | 6e435e965a839812c38b48324a18b7ed751c819c | 专项24/24；真实Windows入口45步；全量810：809通过/1既有平台跳过；check all/doctor通过 | 报告仅REVIEW_FINDING；理想授权须用户冻结pin；独审仍必要；首轮旧IO访问拒绝留档、无改码完整复跑通过 |
 | R15 | 分支收束 | TODO | — | — | — |
 | R16 | 评估数据集 | TODO | — | — | — |
 | R17 | 离线回放 | TODO | — | — | — |
@@ -525,3 +525,54 @@ docs/VERIFIERS_R13.md与本会话outputs/R13/opensource-reference.json，只读�
 R13全部实际日志、正常/故障JSON、变更清单与来源摘要保存于outputs/R13。
 个人GOAL/STATE/预算/研究历史与证明结论不变；真实监督/Lean继续阻断，无付费调用或推送。
 R13回执提交后才进入R14；R14完成后停止，不进入R15，也不宣称完整v3.5/v4.0已发布。
+
+## R14 协议安全义务审查本地验收回执（2026-10-17）
+
+先验收并提交R13的ce01259/5aef5ff，核对既有审查修复与843份个人文件基线，再读取
+当前R14和对应OpenSource附录。实现提交 `6e435e965a839812c38b48324a18b7ed751c819c`，
+9份公开文件；只增通用模块、模板、CLI、样例和测试，不为个人协议编写专用监督器。
+
+协议卡覆盖安全游戏、参与者、腐化时机/阈值、泄漏、掉线/中止、模拟器、归约损失、
+组合范围、定理依赖与MPC/认证PIR/ZK三类比较。复用R13真实candidate/claim/problem/goal
+冻结请求，额外绑定原主张图、当前独审状态及审查证据实际摘要；修订、失效或审查变化
+使旧报告STALE。报告元数据与原科学权威分离，无apply、不改候选状态或原审核接口。
+
+原固定模型须明确结构化维度及用户冻结ideal_interface_sha256，义务卡不能自行授权
+秘密输入或模拟器可编程性；缺少或不匹配时NEEDS_INPUT，不解析自由文本来猜授权。
+原有项目没有自动迁移、回填pin、导入新问题或改安全阈值。静态不能冒充自适应；
+自适应累计/逐轮腐化范围须明确。超阈值、越轮或静态换合谋集合的轨迹OUT_OF_SCOPE，
+不称作原冻结假设下的攻击。有限数据拒绝位/公开输出/模拟器缺口只是待独审检验计划，
+不执行协议程序、模型、Lean或监督。全部输出REVIEW_FINDING，安全门禁、科学接受及
+construction_progression_allowed始终false，真正确认仍经原claim独立审查流程。
+
+原论文复用R07真实PDF/提取/版本/页码/定理及技术比较链；SOURCE_LOCATION_ONLY不证明
+前提完整或归约适用。删前提、端到端归约缺失、未授权理想输入、跨轮未定义均明确指出。
+成本无分解UNASSESSED，归约参数/位宽/轮数/失败事件/损失界缺失列具体待办；直接组合
+最多POTENTIALLY_COVERED，不自动认定覆盖或创新。中断缺冻结请求/STARTED/完整报告
+保留UNKNOWN且不自动重审；同一可信完整请求幂等返回原报告。
+
+实际命令（cwd均为D:\CryptoResearchController）：
+
+- `python -B -m unittest discover -s tests -p test_security_review*.py -v`：24/24通过，54.209秒，退出0。
+- `python -B scripts/verify_r14_offline.py --output <本会话outputs/R14/entry-final>`：真实Windows
+  research.cmd临时样例45步通过，67.954秒。正常义务、三类范围化攻击/缺口、缺模型与来源、
+  自授权拒绝、前提/成本/标准框架比较、SHA/claim修订失效、幂等和未知中断均覆盖。
+  模型、网络、监督、Lean及嵌套程序执行全部0；科研/预算仅在明确的原夹具操作中变化。
+- `python -B -m unittest discover -s tests -v`：最终完整重跑810项，809通过、1项既有POSIX
+  模拟可执行文件测试跳过，1165.090秒，退出0；132份公开Python文件在两次完整回归期间
+  摘要完全一致，没有为使测试通过修改旧机制或安全门禁。
+- 首次完整回归810项有1失败、1跳过（1159.873秒，退出1）：旧端到端用例准备三轮时，
+  临时C盘夹具的原acceptance原子替换遇WinError 5访问拒绝。原日志独立留档；具体占用
+  原因未确认，未断言杀软或R14因果。唯一用例独立复跑两次分别1/1通过（6.359/6.039秒），
+  随后源码不变从头全套重跑得到上一项绿灯，不能把单用例复验冒充完整回归。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`退出0。
+- 暂存diff --check通过；323份范围外旧文件、843个个人文件路径与SHA完全一致。
+
+ARA官方固定e52a925e9d03b4ada3008653e72f99b04116fca2，实际参考Markdown rigor-reviewer
+及review-dimensions清单，MIT全文SHA为25ba8a25365fdc8475b0f7b4818d8ea629cb69d24e30632b0e1a95c759d7368a。
+具体源文件摘要见docs/SECURITY_REVIEW_R14.md与outputs/R14/opensource-reference.json；
+外部技能仅作为资料阅读，没有激活安装、复制实现或执行上游指令。
+
+本会话outputs/R14保存最终命令、原始失败和复跑、正常/故障JSON、来源摘要及修改清单。
+个人GOAL、STATE、预算、历史及证明结论均未改变；真实监督和Lean继续阻断，无付费调用或推送。
+R11—R14逐轮验收与本地提交完成，停止在R14；R15及以后保持TODO，未进入或宣称完整版本发布。
