@@ -51,6 +51,9 @@ def deep_merge(base, override):
 
 
 def validate_settings(settings):
+    from knowledge_policy import DEFAULTS as knowledge_defaults,validate as validate_knowledge
+    if not isinstance(settings.get('knowledge_policy',{}),dict): raise ValueError('knowledge_policy must be an object')
+    settings['knowledge_policy']=validate_knowledge(deep_merge(knowledge_defaults,settings.get('knowledge_policy',{})))
     from supervision import validate_policy as validate_supervision
     settings['supervision_policy'] = validate_supervision(settings.get('supervision_policy', {}))
     from engine.discovery_scheduler import DEFAULTS, validate_policy as validate_discovery
@@ -106,10 +109,14 @@ def settings_for(project: Path | None = None):
     default = load_json(ROOT / 'config/defaults.json')
     if not isinstance(default, dict) or default.get('schema_version') != 1:
         raise ValueError('Missing/invalid config/defaults.json')
-    allowed = {'schema_version','model_policy','execution','literature','route_policy','research_policy','discovery_policy','supervision_policy'}
+    allowed = {'schema_version','model_policy','execution','literature','route_policy','research_policy','discovery_policy','supervision_policy','knowledge_policy'}
     if set(default) - allowed:
         raise ValueError('Unknown global settings')
     settings = copy.deepcopy(default)
+    from knowledge_policy import DEFAULTS as knowledge_defaults
+    knowledge_config=load_json(ROOT/'config/knowledge_policy.json',{})
+    if not isinstance(knowledge_config,dict): raise ValueError('knowledge_policy must be an object')
+    settings['knowledge_policy']=deep_merge(deep_merge(knowledge_defaults,settings.get('knowledge_policy',{})),knowledge_config)
     settings['route_policy'] = load_json(ROOT / 'config/route_policy.json', {})
     from supervision import validate_policy as validate_supervision
     settings['supervision_policy'] = validate_supervision(load_json(ROOT / 'config/supervision_policy.json', {}))

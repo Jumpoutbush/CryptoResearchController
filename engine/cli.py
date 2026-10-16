@@ -70,11 +70,16 @@ def dispatch_knowledge(args):
     import research
     from . import knowledge_graph
     action = args.action
-    if action in {'build', 'explain', 'diff'}:
+    if action in {'build', 'explain', 'diff', 'context'}:
         from knowledge import build as projection
         if args.project == 'all': raise ValueError('Projection operations require one explicit project')
         project = research.resolve_project(args.project)
-        if action=='build': result=projection.build(configuration.ROOT,project,dry_run=args.dry_run,cache_only=args.cache_only)
+        if action=='context':
+            from knowledge.context_builder import build
+            result=build(configuration.ROOT,project,task=args.task,claim_id=args.claim,problem_id=args.problem,
+                problem_version=args.problem_version,obligation_id=args.obligation,goal_anchor_id=args.goal_anchor,
+                max_bytes=args.max_bytes)
+        elif action=='build': result=projection.build(configuration.ROOT,project,dry_run=args.dry_run,cache_only=args.cache_only)
         elif action=='diff':
             from knowledge import events
             result=events.diff(configuration.ROOT,project,args.from_index,args.to_index)
@@ -115,6 +120,7 @@ def add_commands(subparsers, add_project, common_run_options):
         'build':'构建可删重建的只读来源投影；仅写state/knowledge缓存',
         'explain':'只读解释精确主张版本、义务、问题、目标和来源',
         'diff':'只读比较两个已保存的图谱版本与失效原因',
+        'context':'只读预览按义务分级的有来源上下文，不调用模型',
         'search': '只读检索当前及历史知识；历史命中不表示当前通过',
         'show': '只读查看节点；--revision 选择知识历史版本',
         'trace': '只读追溯当前状态和精确绑定的历史来源快照',
@@ -122,9 +128,13 @@ def add_commands(subparsers, add_project, common_run_options):
         'import': '持锁登记结构化知识及精确来源',
         'refresh': '持锁刷新本地来源索引，不调用模型',
         'invalidate': '持锁登记明确失效原因，保留历史'}
-    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate', 'build', 'explain', 'diff'):
+    for action in ('status', 'search', 'show', 'trace', 'impact', 'import', 'refresh', 'invalidate', 'build', 'explain', 'diff', 'context'):
         cmd = subs.add_parser(action, help=descriptions[action], description=descriptions[action])
         add_project(cmd); cmd.set_defaults(function=dispatch_knowledge)
+        if action=='context':
+            cmd.add_argument('--task',default=''); cmd.add_argument('--claim'); cmd.add_argument('--problem')
+            cmd.add_argument('--problem-version',type=int); cmd.add_argument('--obligation'); cmd.add_argument('--goal-anchor')
+            cmd.add_argument('--max-bytes',type=int,default=32768); cmd.add_argument('--dry-run',action='store_true')
         if action == 'build':
             cmd.add_argument('--dry-run', action='store_true')
             cmd.add_argument('--cache-only',action='store_true',help='仅重建索引，保留并报告损坏的历史，不追加事件')

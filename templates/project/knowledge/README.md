@@ -16,3 +16,7 @@ Graph builds also retain an append-only observation history beside the disposabl
 index. `knowledge diff --from-index <sha> --to-index <sha>` compares recorded versions;
 `knowledge explain` shows original invalidation causes and exact old dependency pins.
 Preserve `history.json` when deleting an index. See `docs/KNOWLEDGE_R08_LINEAGE.md`.
+
+Optional local `knowledge context --task ... --dry-run` returns evidence with exact
+source hashes, trust levels and omitted/missing lists. Prompt injection defaults off;
+enable only through controller knowledge_policy. See `docs/KNOWLEDGE_R09_CONTEXT.md`.

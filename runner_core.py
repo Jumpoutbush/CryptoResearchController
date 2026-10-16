@@ -380,6 +380,9 @@ def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, aud
               for path in project_rules(project)]
     goal = read_text(project / 'GOAL.md')
     guide_context = __import__('supervision_guide').prompt_context(ROOT, project)
+    evidence_context=''
+    if __import__('configuration').settings_for(project)['knowledge_policy']['enabled']:
+        evidence_context=__import__('knowledge.context_builder',fromlist=['prompt_context']).prompt_context(ROOT,project,state)
     last = read_text(project / 'reports' / 'LATEST.md')
     if len(last) > 12000:
         last = last[:6500] + '\n[Middle omitted; read the full report when needed.]\n' + last[-5500:]
@@ -404,6 +407,7 @@ def build_prompt(project: pathlib.Path, state: dict, rid: str, tier: str, *, aud
         __import__('supervision').prompt_context(ROOT, project),
         *([guide_context] if guide_context else []),
         __import__('engine.knowledge_graph', fromlist=['context']).context(project),
+        *([evidence_context] if evidence_context else []),
         stage_instructions(project, state['phase'], audit=audit, route_review=route_review),
         project_input_context(project),
         __import__('engine.initialization', fromlist=['context']).context(project, state),
