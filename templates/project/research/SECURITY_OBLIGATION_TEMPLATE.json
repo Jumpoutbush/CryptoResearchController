@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "proof_paths": [],
+  "security_game": {
+    "id": "GAME-main",
+    "definition": null,
+    "rounds": null,
+    "public_outputs": []
+  },
+  "parties": [],
+  "corruption_model": {
+    "timing": null,
+    "claimed_timing": null,
+    "threshold": null,
+    "claimed_threshold": null,
+    "corrupted_parties": [],
+    "dropout_model": null
+  },
+  "leakage_function": {
+    "name": null,
+    "real_observable": [],
+    "ideal_leakage": [],
+    "cross_round_linkage": null
+  },
+  "setup_assumptions": [],
+  "abort_behavior": {
+    "public_reject_bit": null,
+    "ideal_reject_bit": null,
+    "forking_visible": null,
+    "dropout_visible": null
+  },
+  "simulator_interface": {
+    "ideal_inputs": [],
+    "required_inputs": [],
+    "authorized_programming": [],
+    "required_programming": [],
+    "output_dependencies": {}
+  },
+  "reduction_loss": {
+    "parameters": [],
+    "bit_widths": {},
+    "rounds": null,
+    "failure_events": [],
+    "loss_bound": null,
+    "cost_breakdown": []
+  },
+  "composition_scope": {
+    "sessions": null,
+    "rounds": null,
+    "cross_round_collusion": null,
+    "component_theorems": [],
+    "end_to_end_reduction": null
+  },
+  "dependencies": [],
+  "baseline_comparison": [
+    {
+      "framework": "MALICIOUS_MPC",
+      "assumptions": null,
+      "functionality": null,
+      "cost": null,
+      "difference": null,
+      "source_span_ids": [],
+      "relation": "UNRESOLVED"
+    },
+    {
+      "framework": "AUTHENTICATED_PIR",
+      "assumptions": null,
+      "functionality": null,
+      "cost": null,
+      "difference": null,
+      "source_span_ids": [],
+      "relation": "UNRESOLVED"
+    },
+    {
+      "framework": "ZK_COMPOSITION",
+      "assumptions": null,
+      "functionality": null,
+      "cost": null,
+      "difference": null,
+      "source_span_ids": [],
+      "relation": "UNRESOLVED"
+    }
+  ],
+  "attack_traces": []
+}

@@ -13,11 +13,22 @@ def dispatch(args):
     project = research.resolve_project(args.project)
     with contextlib.ExitStack() as stack:
         if args.action not in {'list', 'show', 'anchor', 'plan', 'schedule-status',
-                                'verify-prepare', 'verification-show', 'verification-recheck'}:
+                                'verify-prepare', 'verification-show', 'verification-recheck',
+                                'security-prepare', 'security-show', 'security-recheck'}:
             stack.enter_context(research.project_lock(project))
             stack.enter_context(file_lock(configuration.ROOT / 'locks' /
                                           (configuration.project_id(project) + '.lock')))
-        if args.action in {'verify-prepare', 'verify', 'verification-show', 'verification-recheck'}:
+        if args.action in {'security-prepare', 'security-review', 'security-show', 'security-recheck'}:
+            from candidate_search import security_model, security_review
+            if args.action == 'security-prepare':
+                result = security_model.prepare_request(project, args.id, args.claim, read_object(Path(args.card)))
+            elif args.action == 'security-review':
+                result = security_review.review(project, read_object(Path(args.request)), locks_held=True)
+            elif args.action == 'security-show':
+                result = security_review.show(project, args.request_id)
+            else:
+                result = security_review.recheck(project, args.request_id)
+        elif args.action in {'verify-prepare', 'verify', 'verification-show', 'verification-recheck'}:
             from candidate_search.verifiers import interface
             if args.action == 'verify-prepare':
                 result = interface.prepare_request(project, args.id, args.claim,
@@ -71,6 +82,8 @@ def dispatch(args):
         research.print_json(result)
         if args.action in {'verify', 'verification-recheck'} and result.get('result_status') in {'FAILED', 'UNSUPPORTED'}:
             return 2
+        if args.action in {'security-review', 'security-recheck'} and result.get('decision') in {'FAILED', 'NEEDS_INPUT', 'NEEDS_SOURCE'}:
+            return 2
     return 0
 
 
@@ -79,7 +92,8 @@ def add_commands(subparsers, add_project):
     actions = top.add_subparsers(dest='action', required=True)
     for action in ('anchor', 'list', 'show', 'propose', 'revise', 'status',
                    'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run',
-                   'verify-prepare', 'verify', 'verification-show', 'verification-recheck'):
+                   'verify-prepare', 'verify', 'verification-show', 'verification-recheck',
+                   'security-prepare', 'security-review', 'security-show', 'security-recheck'):
         command = actions.add_parser(action)
         add_project(command)
         command.set_defaults(function=dispatch)
@@ -112,7 +126,15 @@ def add_commands(subparsers, add_project):
             command.add_argument('--declaration')
         if action == 'verify':
             command.add_argument('--request', required=True)
+        if action == 'security-prepare':
+            command.add_argument('--id', required=True)
+            command.add_argument('--claim', required=True)
+            command.add_argument('--card', required=True, help='协议义务卡JSON，不授予科学审查权限')
+        if action == 'security-review':
+            command.add_argument('--request', required=True)
         if action in {'verification-show', 'verification-recheck'}:
+            command.add_argument('--request-id', required=True)
+        if action in {'security-show', 'security-recheck'}:
             command.add_argument('--request-id', required=True)
         if action == 'status':
             command.add_argument('--id', required=True)
