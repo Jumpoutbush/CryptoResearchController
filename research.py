@@ -360,6 +360,18 @@ def command_supervision(args):
     """Controller-only supervisor operations; preview/status never call a model."""
     import supervision
     action = args.supervision_command
+    if action in {'preview', 'apply', 'guide-recover'} or (action == 'rollback' and args.event_id):
+        import supervision_guide as guide
+        if args.project == 'all': raise ValueError('Guide operations require one project.')
+        project = resolve_project(args.project)
+        if action == 'preview': result = guide.preview(ROOT, project, args.event_id)
+        elif action == 'guide-recover': result = guide.recover(ROOT, project, args.event_id)
+        else:
+            if not args.expected_hash: raise ValueError('Guide writes require --expected-hash from the preview/current version.')
+            operation = guide.apply if action == 'apply' else guide.rollback
+            result = operation(ROOT, project, args.event_id, expected_hash=args.expected_hash)
+        print_json(result)
+        return 0 if result['status'] in {'PREVIEW', 'APPLIED', 'ROLLED_BACK'} else 2
     if action == 'executor-info':
         from supervision_executor import inspect_cli
         print_json(inspect_cli())
@@ -917,7 +929,7 @@ def parser():
     c.add_argument("--pdf-limit", type=int); c.add_argument("--pdf-max-mb", type=int)
     c = command("supervision", command_supervision, "配置、查看、执行或回滚独立科研监督", aliases=['supervise'])
     supervision_sub = c.add_subparsers(dest="supervision_command", required=True)
-    for action in ("status", "pending", "history", "show", "configure", "run", "rollback", "execute", "executor-info"):
+    for action in ("status", "pending", "history", "show", "configure", "run", "rollback", "execute", "executor-info", "preview", "apply", "guide-recover"):
         supervisor = supervision_sub.add_parser(action)
         if action != 'executor-info': add_project(supervisor)
         if action == "configure":
@@ -936,8 +948,14 @@ def parser():
         elif action == "run":
             supervisor.add_argument("--dry-run", action="store_true", help="只读显示状态，不执行监督模型")
             supervisor.add_argument("--force", action="store_true", help="显式触发当前快照监督，仍遵守独立预算和幂等约束")
+        elif action in {'preview', 'apply', 'guide-recover'}:
+            supervisor.add_argument('--event', '--event-id', dest='event_id', required=True)
+            if action == 'apply': supervisor.add_argument('--expected-hash', required=True, help='旧指南SHA-256；无文件用ABSENT')
         elif action == "rollback":
-            supervisor.add_argument("--id", required=True, help="最新已应用监督记录的 review_id")
+            target = supervisor.add_mutually_exclusive_group(required=True)
+            target.add_argument("--id", help="旧版最新监督记录的 review_id")
+            target.add_argument('--event', '--event-id', dest='event_id', help='R04指南来源事件')
+            supervisor.add_argument('--expected-hash', help='R04当前指南SHA-256')
         elif action == "show":
             supervisor.add_argument("--id", help="监督记录的 review_id；默认查看最近记录")
     c = command("fetch", command_fetch, "更新文献与本地 PDF 提取")

@@ -21,6 +21,7 @@ HEX = re.compile(r'^[0-9a-f]{64}$')
 OPS = {'EVENT_QUEUED', 'EVENT_RECOVERED', 'DEFERRED_TO_ROUTE_REVIEW', 'DEFERRAL_RESOLVED',
        'DEFERRAL_CONFLICT', 'CALL_RESERVED', 'CLAIM_FINISHED', 'CLAIM_BLOCKED', 'LOCK_CONFLICT',
        'RESERVATION_INTENT', 'CALL_DISPATCHED', 'CALL_COMPLETED', 'BLOCKED_MISSING_FROZEN_INPUT'}
+OPS |= {'GUIDE_PREPARED', 'GUIDE_APPLIED', 'GUIDE_ROLLBACK_PREPARED', 'GUIDE_ROLLED_BACK', 'GUIDE_ABORTED'}
 
 
 def home(controller, project):
@@ -245,6 +246,14 @@ def view(controller, project):
         from supervision_calls import recovery_info
         result[-1].update(recovery_info(controller, project, path.stem, saved))
         result[-1]['recovery_required'] |= bool(result[-1].get('completion_replay_required') or result[-1].get('operator_audit_required'))
+        if _path(home(controller, project), 'guide-plans').exists():
+            from supervision_guide import event_status
+            guidance = event_status(controller, project, path.stem)
+            if guidance:
+                result[-1]['call_state'] = state  # Original cost ledger remains PROPOSED.
+                result[-1]['guidance'] = guidance
+                if guidance['applied']: result[-1]['state'] = 'APPLIED'
+                result[-1]['recovery_required'] |= guidance['recovery_required']
     for key in reserved:
         if not any(item['event_id'] == key for item in result):
             raise ValueError('Reserved event input is missing; refusing to recreate a free call')
