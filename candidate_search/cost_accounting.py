@@ -120,16 +120,17 @@ def trusted_run(project, run_id, attempt_id):
         events = [event for event in view['route']['events']
                   if event.get('type')=='RESEARCH_ROUND' and event.get('run_id')==run_id]
         counted = [e for e in view['route']['epochs'] if run_id in e['counted_run_ids']]
-        if len(events)!=1 or not counted: raise ValueError('Original accepted route receipt is unavailable')
-        route_event=events[0]
+        if len(events)>1 or not counted: raise ValueError('Original accepted route receipt is unavailable')
         # A post-binding accepted run must have the original wrapper's durable
-        # COMPLETE receipt. Legacy strings alone cannot invent acceptance.
+        # COMPLETE receipt. Current events are a bounded display history and
+        # may legitimately omit this run; counted identities are not trimmed.
+        # The immutable original afterimage supplies the event, never a new
+        # event synthesized from current files or a candidate's assertions.
         latest=research_acceptance.path_for(configuration.ROOT,project)
         archive=latest.parent/configuration.project_id(project)
         paths=([latest] if latest.is_file() else [])+list(archive.glob('*.json'))
         if len(paths)>10000: raise ValueError('Acceptance receipt history limit exceeded')
         matches=[]
-        from engine.common import object_hash
         for path in paths:
             catalog._unlinked(path)
             journal=configuration.load_json(path)
@@ -139,17 +140,43 @@ def trusted_run(project, run_id, attempt_id):
                     or journal.get('project_id')!=configuration.project_id(project)
                     or journal.get('phase')!='COMPLETE'
                     or journal.get('discovery_owner_attempt_id')!=attempt_id
+                    or journal.get('route_path')!='state/routes/'+configuration.project_id(project)+'.json'
                     or journal.get('journal_sha256')!=research_acceptance.digest({
                         k:v for k,v in journal.items() if k!='journal_sha256'})):
                 raise ValueError('Original COMPLETE acceptance receipt binding is invalid')
             after=journal.get('route_after',{})
+            if (not isinstance(after,dict) or not isinstance(after.get('events'),list)
+                    or not isinstance(after.get('epochs'),list)
+                    or any(not isinstance(e,dict) for e in after['events']+after['epochs'])):
+                raise ValueError('Original COMPLETE acceptance route image changed')
             archived_events=[e for e in after.get('events',[]) if e.get('type')=='RESEARCH_ROUND' and e.get('run_id')==run_id]
-            if (len(archived_events)!=1 or archived_events[0]!=route_event
+            if (len(archived_events)!=1 or (events and archived_events[0]!=events[0])
                     or not any(run_id in e.get('counted_run_ids',[]) for e in after.get('epochs',[]))):
                 raise ValueError('Original COMPLETE acceptance route image changed')
+            original=archived_events[0]
+            original_epochs=[e for e in after.get('epochs',[]) if run_id in e.get('counted_run_ids',[])
+                and e.get('route')==original.get('route')
+                and e.get('focus',{}).get('anchor_id')==original.get('anchor_id')]
+            if not original_epochs or not any(
+                    e.get('epoch')==old.get('epoch') and e.get('route')==old.get('route')
+                    and e.get('focus',{}).get('anchor_id')==original.get('anchor_id')
+                    for old in original_epochs for e in counted):
+                raise ValueError('Original COMPLETE acceptance route image anchor/epoch changed')
+            # Modern wrapper receipts additionally freeze the exact settled
+            # terminal call. Keep the original terminal settlement checks above
+            # for all receipts, including the earlier COMPLETE schema variant.
+            steps=journal.get('steps',{})
+            if not isinstance(steps,dict): raise ValueError('Original COMPLETE acceptance steps changed')
+            settled=steps.get('discovery')
+            if settled is not None and (not isinstance(settled,dict)
+                    or settled.get('attempt_id')!=attempt_id or settled.get('run_id')!=run_id
+                    or settled.get('call_sha256')!=research_acceptance.digest(call)):
+                raise ValueError('Original COMPLETE acceptance settled owner/call binding changed')
             matches.append(journal)
         if not matches or any(record!=matches[0] for record in matches):
             raise ValueError('Original COMPLETE acceptance receipt is missing or ambiguous')
+        route_event=next(event for event in matches[0]['route_after']['events']
+                         if event.get('type')=='RESEARCH_ROUND' and event.get('run_id')==run_id)
         acceptance_epochs=copy.deepcopy(matches[0]['route_after']['epochs'])
     elif any(run_id in e['counted_run_ids'] for e in view['route']['epochs']):
         raise ValueError('Failed original call cannot be counted as an accepted research round')

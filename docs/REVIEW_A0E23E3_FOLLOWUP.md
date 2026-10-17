@@ -27,9 +27,12 @@ test_review_guide_cas.py，真实后端仍阻断。知识维护失败先停止�
 之后恢复原论文、审查或工具日志字节不恢复旧认可；每个受影响 scope 需要独立新审查，
 上游有效后下游才能逐级恢复。新 claim revision 不会篡改旧损坏历史或自动改绑最新依赖。
 
-status/context/explain/derive 仍纯只读。普通 build/cache-only 不反写主张权威；
-如果旧正面回执出现尚未记录的新失效，先在缓存/history 写入前停止，提示显式
-`research.cmd claim refresh <project>`。空图和未审查候选仍可正常构图。
+status/context/explain/derive 与 build --dry-run 仍纯只读。普通 build 不反写主张权威；
+如果旧正面回执出现尚未记录的新失效，普通 build 在缓存/history 写入前停止，提示显式
+`research.cmd claim refresh <project>`。build --cache-only 是明确的恢复例外：允许重建派生
+index，返回 pending_revocations 诊断，但不追加 R08 观察历史，也不写 canonical 失效锁。
+因此 cache-only 不等于已完成失效记录或重新审查；需要持久撤销时仍须显式 claim refresh。
+空图和未审查候选仍可正常构图。
 没有落盘的瞬时只读检查无法记住文件已经恢复前的变化，不能宣称每次查询均永久撤销。
 索引和观察快照不能成为第二份科学认可权威。
 

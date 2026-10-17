@@ -35,6 +35,9 @@ def _manifest(controller, project):
     paths += [('CONTROLLER', s, _path(controller, s)) for s in (
         'state/routes/' + key + '.json', 'state/discovery/' + key + '.json',
         'config/defaults.json', 'config/discovery_defaults.json', 'config/projects/' + key + '.json')]
+    from .adapters import candidate_resolutions
+    paths += [('CONTROLLER', s, _path(controller, s))
+              for s in candidate_resolutions.controller_paths(controller, key, project)]
     for scope, relative, path in paths:
         if scope == 'PROJECT':
             try: path = _safe_reference(project, relative)
@@ -257,6 +260,8 @@ def derive(controller, project):
     from . import sources
     sources.project(g,claim_nodes)
     _trajectory(g, problem_nodes)
+    from .adapters import candidate_resolutions
+    candidate_resolutions.project(g, claim_nodes)
     after = _manifest(controller, project)
     if after != manifest: raise ValueError('SOURCE_CHANGED_DURING_BUILD')
     graph = {'schema_version':schema.SCHEMA_VERSION,'builder_version':schema.BUILDER_VERSION,

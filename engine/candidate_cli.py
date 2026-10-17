@@ -14,11 +14,41 @@ def dispatch(args):
     with contextlib.ExitStack() as stack:
         if args.action not in {'list', 'show', 'anchor', 'plan', 'schedule-status',
                                 'verify-prepare', 'verification-show', 'verification-recheck',
-                                'security-prepare', 'security-show', 'security-recheck'}:
+                                'security-prepare', 'security-show', 'security-recheck',
+                                'resolve-prepare', 'resolution-review-template', 'restart-review-template', 'compare', 'history',
+                                'switch-prepare', 'switch-status'}:
             stack.enter_context(research.project_lock(project))
             stack.enter_context(file_lock(configuration.ROOT / 'locks' /
                                           (configuration.project_id(project) + '.lock')))
-        if args.action in {'security-prepare', 'security-review', 'security-show', 'security-recheck'}:
+        if args.action in {'resolve-prepare', 'resolve', 'retire', 'resolution-review-template', 'restart-review-template',
+                           'compare', 'history', 'switch-prepare', 'switch-apply', 'switch-recover', 'switch-status'}:
+            from candidate_search import resolution, history
+            if args.action == 'resolve-prepare':
+                result = resolution.prepare_request(project, args.id, args.claim, read_object(Path(args.card)))
+            elif args.action == 'resolve':
+                result = resolution.resolve(project, read_object(Path(args.request)), locks_held=True)
+            elif args.action == 'retire':
+                result = resolution.retire(project, args.id, expected_revision=args.expected_revision,
+                    reason=args.reason, scope=args.scope, restart_conditions=args.restart_conditions, locks_held=True)
+            elif args.action == 'resolution-review-template':
+                result = resolution.semantic_review_template(project, args.id, args.claim, args.status,
+                    scope=args.scope, verification_request_id=args.verification_request_id)
+            elif args.action == 'restart-review-template':
+                result = resolution.restart_review_template(project, args.id, args.claim)
+            elif args.action == 'compare':
+                result = resolution.compare(project, args.id)
+            elif args.action == 'history':
+                result = history.view(project, candidate_id=args.id)
+            elif args.action == 'switch-prepare':
+                result = resolution.prepare_switch(project, args.id, phase=args.phase, reason=args.reason,
+                    expected_revision=args.expected_revision, from_attempt_id=args.from_attempt_id)
+            elif args.action == 'switch-apply':
+                result = resolution.apply_switch(project, read_object(Path(args.request)), locks_held=True)
+            elif args.action == 'switch-recover':
+                result = resolution.recover_switch(project, args.request_id, locks_held=True)
+            else:
+                result = resolution.switch_status(project, args.request_id)
+        elif args.action in {'security-prepare', 'security-review', 'security-show', 'security-recheck'}:
             from candidate_search import security_model, security_review
             if args.action == 'security-prepare':
                 result = security_model.prepare_request(project, args.id, args.claim, read_object(Path(args.card)))
@@ -84,6 +114,8 @@ def dispatch(args):
             return 2
         if args.action in {'security-review', 'security-recheck'} and result.get('decision') in {'FAILED', 'NEEDS_INPUT', 'NEEDS_SOURCE'}:
             return 2
+        if args.action in {'resolve', 'retire', 'switch-apply', 'switch-recover'} and result.get('status') == 'FAILED':
+            return 2
     return 0
 
 
@@ -93,7 +125,9 @@ def add_commands(subparsers, add_project):
     for action in ('anchor', 'list', 'show', 'propose', 'revise', 'status',
                    'plan', 'schedule-status', 'select', 'bind-attempt', 'map-run',
                    'verify-prepare', 'verify', 'verification-show', 'verification-recheck',
-                   'security-prepare', 'security-review', 'security-show', 'security-recheck'):
+                   'security-prepare', 'security-review', 'security-show', 'security-recheck',
+                   'resolve-prepare', 'resolve', 'retire', 'resolution-review-template', 'restart-review-template', 'compare', 'history',
+                   'switch-prepare', 'switch-apply', 'switch-recover', 'switch-status'):
         command = actions.add_parser(action)
         add_project(command)
         command.set_defaults(function=dispatch)
@@ -132,6 +166,39 @@ def add_commands(subparsers, add_project):
             command.add_argument('--card', required=True, help='协议义务卡JSON，不授予科学审查权限')
         if action == 'security-review':
             command.add_argument('--request', required=True)
+        if action == 'resolve-prepare':
+            command.add_argument('--id', required=True)
+            command.add_argument('--claim')
+            command.add_argument('--card', required=True)
+        if action == 'resolution-review-template':
+            command.add_argument('--id', required=True)
+            command.add_argument('--claim', required=True)
+            command.add_argument('--status', choices=('REFUTED', 'COVERED'), required=True)
+            command.add_argument('--scope', required=True)
+            command.add_argument('--verification-request-id')
+        if action == 'restart-review-template':
+            command.add_argument('--id', required=True)
+            command.add_argument('--claim', required=True)
+        if action == 'retire':
+            command.add_argument('--id', required=True)
+            command.add_argument('--expected-revision', required=True, type=int)
+            command.add_argument('--reason', required=True)
+            command.add_argument('--scope', required=True)
+            command.add_argument('--restart-conditions', required=True)
+        if action == 'compare':
+            command.add_argument('--id', action='append', required=True)
+        if action == 'history':
+            command.add_argument('--id')
+        if action == 'switch-prepare':
+            command.add_argument('--id', required=True)
+            command.add_argument('--expected-revision', required=True, type=int)
+            command.add_argument('--phase', required=True, choices=('CLOSE', 'START'))
+            command.add_argument('--reason', required=True)
+            command.add_argument('--from-attempt-id')
+        if action in {'resolve', 'switch-apply'}:
+            command.add_argument('--request', required=True)
+        if action in {'switch-recover', 'switch-status'}:
+            command.add_argument('--request-id', required=True)
         if action in {'verification-show', 'verification-recheck'}:
             command.add_argument('--request-id', required=True)
         if action in {'security-show', 'security-recheck'}:

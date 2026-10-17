@@ -89,7 +89,12 @@ def _analyze(request):
         finding('MODEL_SCOPE_MISMATCH','Static and adaptive corruption are different claims; the frozen theorem cannot be silently strengthened.')
     threshold=frozen.get('corruption_threshold')
     adaptive_budget=frozen.get('corruption_budget_scope')
-    if frozen.get('corruption_timing')=='ADAPTIVE' and adaptive_budget not in {'CUMULATIVE','PER_ROUND'}:
+    budget_defined=type(adaptive_budget) is str and adaptive_budget in {'CUMULATIVE','PER_ROUND'}
+    if (candidate.get('corruption_budget_scope')!=adaptive_budget
+            or frozen.get('corruption_timing')=='ADAPTIVE' and not budget_defined):
+        finding('MODEL_SCOPE_MISMATCH','Candidate corruption_budget_scope must exactly match the defined user-frozen adaptive budget scope; frozen='
+                +repr(adaptive_budget)+', candidate='+repr(candidate.get('corruption_budget_scope'))+'.')
+    if frozen.get('corruption_timing')=='ADAPTIVE' and not budget_defined:
         needs_input=True; finding('ADAPTIVE_CORRUPTION_BUDGET_UNDEFINED','The frozen adaptive model must explicitly define CUMULATIVE or PER_ROUND corruption accounting; per-step counts do not define the whole game.')
     if type(threshold) is int and any(corruption[k]!=threshold for k in ('threshold','claimed_threshold') if corruption[k] is not None):
         finding('MODEL_SCOPE_MISMATCH','The declared corruption threshold differs from the frozen problem; excess corruption is OUTSIDE_FROZEN_MODEL.')

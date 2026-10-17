@@ -389,7 +389,19 @@ def record_run_mapping(project,selection_id,run_id,*,reason,expected_attempt_id=
         owners=[e['payload'] for e in data['events'] if e['type']=='ATTEMPT_BOUND'
                 and e['payload']['selection_id']==selection_id and e['payload']['attempt_id']==expected_attempt_id]
         if len(owners)!=1: raise ValueError('A unique pre-dispatch candidate owner binding is required')
-        owner=owners[0]; trusted=costs.trusted_run(project,run_id,owner['attempt_id']); attempt=trusted['attempt']
+        owner=owners[0]
+        # A committed mapping is historical scheduling provenance. Its original
+        # owner/acceptance were checked before append; replay the protected
+        # selection history without requiring bounded current display events.
+        for event in data['events']:
+            if event['type']=='RUN_MAPPED' and event['payload']['run_id']==run_id:
+                mapped=event['payload']
+                if (mapped['selection_id']!=selection_id or mapped['attempt_id']!=owner['attempt_id']
+                        or mapped['candidate_id']!=owner['candidate_id']
+                        or mapped['candidate_revision']!=owner['candidate_revision']):
+                    raise ValueError('Original run already maps to another candidate or attempt')
+                return {'status':'RUN_MAPPING_RECORDED','mapping':copy.deepcopy(mapped),'idempotent':True,'execution_allowed':False}
+        trusted=costs.trusted_run(project,run_id,owner['attempt_id']); attempt=trusted['attempt']
         if (attempt['problem_id']!=owner['problem_id'] or attempt['problem_version']!=owner['problem_version']
                 or attempt['problem_sha256']!=owner['problem_sha256']):
             raise ValueError('Original run owner fixed problem changed after binding')
@@ -403,10 +415,6 @@ def record_run_mapping(project,selection_id,run_id,*,reason,expected_attempt_id=
             raise ValueError('Original accepted run belongs to a different frozen route epoch')
         if run_id in selected['snapshot']['known_discovery_run_ids'] or run_id in selected['snapshot']['route_counted_run_ids']:
             raise ValueError('Retroactive attribution of an existing run is forbidden')
-        for event in data['events']:
-            if event['type']=='RUN_MAPPED' and event['payload']['run_id']==run_id:
-                if event['payload']['selection_id']!=selection_id: raise ValueError('Original run already maps to another candidate')
-                return {'status':'RUN_MAPPING_RECORDED','mapping':copy.deepcopy(event['payload']),'idempotent':True,'execution_allowed':False}
         record={'selection_id':selection_id,'candidate_id':owner['candidate_id'],'candidate_revision':owner['candidate_revision'],
             'attempt_id':owner['attempt_id'],'run_id':run_id,'call_status':trusted['call']['status'],
             'settlement_sha256':trusted['settlement_sha256'],'discovery_ledger_sha256':trusted['ledger_sha256'],

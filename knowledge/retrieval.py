@@ -90,12 +90,16 @@ def search(controller,project,*,task='',claim_id=None,problem_id=None,problem_ve
     tokens=set(re.findall(r'\w+',task.casefold()))
     def relevance(n):
         text=' '.join(str(n.get(k,'')) for k in ('statement','title','failure_reason'))
+        if n.get('origin_role')=='CANDIDATE_RESOLUTION':
+            text+=' '+' '.join(str(n.get(k,'')) for k in ('candidate_id','conclusion_scope','restart_conditions'))
         if isinstance(n.get('location'),dict): text+=' '+str(n['location'].get('excerpt',''))
         return sum(1 for t in tokens if t in text.casefold())
     seeds={n['id'] for n in claims} if exact else {n['id'] for n in graph['nodes'] if relevance(n)}
     seeds.update(n['id'] for n in graph['nodes'] if n['kind'] in {'PROBLEM_VERSION','OBLIGATION'} and problem_id
         and n.get('problem_id')==problem_id and n.get('problem_version')==problem_version
         and (n['kind']=='PROBLEM_VERSION' or not obligation_id or n.get('obligation_id')==obligation_id))
+    seeds.update(n['id'] for n in graph['nodes'] if n.get('origin_role')=='CANDIDATE_RESOLUTION' and problem_id
+        and n.get('problem_id')==problem_id and n.get('problem_version')==problem_version)
     if not seeds: missing.append('NO_RELEVANT_EVIDENCE')
     if exact and not any(n['proof_status']=='INDEPENDENTLY_REVIEWED' for n in claims): missing.append('NO_CURRENT_REVIEWED_CLAIM_FOR_TARGET')
     if active and (problem_id,problem_version)!=(active['problem_id'],active['problem_version']):
@@ -136,6 +140,13 @@ def search(controller,project,*,task='',claim_id=None,problem_id=None,problem_ve
             positive_basis=positive,role=role,required=n['id'] in required,source_id=n['source_id'],
             current_sha256=n.get('current_sha256'),relevance_score=score)
         if n['kind']=='CLAIM_REVISION': item['assumptions']=specs[(n['claim_id'],n['claim_revision'])]['assumptions']
+        if n.get('origin_role')=='CANDIDATE_RESOLUTION':
+            item['branch_archive']={k:n[k] for k in ('candidate_id','candidate_revision','candidate_spec_sha256',
+                'status','conclusion_scope','assumptions','failure_reason','restart_conditions','used_research_rounds',
+                'route_epoch','open_obligations','reusable_lemmas','evidence_bindings',
+                'controller_evidence_bindings','authority_bindings','stale_sources') if k in n}
+            item.update(positive_basis=False, scientific_acceptance=False, family_refuted=False,
+                role='INVALIDATED_CONTEXT_ONLY' if n.get('validity')=='PENDING_REVALIDATION' else 'SCOPED_BRANCH_HISTORY')
         if (n['kind']=='SOURCE_VERSION' and n.get('source_scope')=='PROJECT'
                 and n['source_path'].endswith(('.md','.txt','.tex','.lean'))
                 and n.get('pinned_sha256') and n.get('pinned_sha256')==n.get('current_sha256')):

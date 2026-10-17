@@ -191,7 +191,7 @@ class ReviewDiscoverySettlementTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): scheduler.finalize_wrapper(self.project, True, 'r1')
         ledger_path(self.project).write_bytes(backup)
         with mock.patch.object(verification_engine, 'process_candidates') as checks:
-            with self.assertRaisesRegex(ValueError, 'UNKNOWN_LOCAL_CHECK_OUTCOME'):
+            with self.assertRaisesRegex(ValueError, 'DISCOVERY_AUTHORITY_STALE'):
                 scheduler.finalize_wrapper(self.project, True, 'r1')
         checks.assert_not_called()
         self.assertEqual(backup, ledger_path(self.project).read_bytes())
@@ -199,13 +199,21 @@ class ReviewDiscoverySettlementTests(unittest.TestCase):
     def test_frozen_owner_cannot_disappear_or_change_during_wrapper_recovery(self):
         self.pending()
         original = ledger(self.project)
+        original_bytes = ledger_path(self.project).read_bytes()
         ledger_path(self.project).unlink()
-        with self.assertRaisesRegex(ValueError, 'DISCOVERY_OWNER_MISSING'):
+        with self.assertRaisesRegex(ValueError, 'DISCOVERY_AUTHORITY_MISSING'):
             scheduler.finalize_wrapper(self.project, True, 'r1', expected_attempt_id='attempt-0001')
         self.assertFalse(ledger_path(self.project).exists())
+        # Restoring the exact known fixture bytes permits testing a separate
+        # fault; save_ledger must never rebuild missing authority itself.
+        ledger_path(self.project).write_bytes(original_bytes)
         original['attempts'][0]['id'] = 'attempt-other'
-        save_ledger(self.project, original)
-        with self.assertRaisesRegex(ValueError, 'DISCOVERY_OWNER_CHANGED'):
+        original['active_attempt'] = 'attempt-other'
+        with self.assertRaisesRegex(ValueError, 'DISCOVERY_AUTHORITY_REGRESSION'):
+            save_ledger(self.project, original)
+        self.assertEqual(ledger_path(self.project).read_bytes(), original_bytes)
+        configuration.atomic_json(ledger_path(self.project), original)
+        with self.assertRaisesRegex(ValueError, 'DISCOVERY_AUTHORITY_STALE'):
             scheduler.finalize_wrapper(self.project, True, 'r1', expected_attempt_id='attempt-0001')
 
     def test_terminal_call_cannot_replace_the_trusted_completion_afterimage(self):
@@ -213,8 +221,12 @@ class ReviewDiscoverySettlementTests(unittest.TestCase):
         scheduler.finalize_wrapper(self.project,True,'r1',expected_attempt_id='attempt-0001')
         changed=ledger(self.project)
         changed['attempts'][0]['calls'][0]['evaluation']['procedural_progress']=True
-        save_ledger(self.project,changed)
-        with self.assertRaisesRegex(ValueError,'DISCOVERY_TERMINAL_RECEIPT_CHANGED'):
+        original=ledger_path(self.project).read_bytes()
+        with self.assertRaisesRegex(ValueError,'DISCOVERY_AUTHORITY_REGRESSION'):
+            save_ledger(self.project,changed)
+        self.assertEqual(original,ledger_path(self.project).read_bytes())
+        configuration.atomic_json(ledger_path(self.project),changed)
+        with self.assertRaisesRegex(ValueError,'DISCOVERY_AUTHORITY_STALE'):
             scheduler.finalize_wrapper(self.project,True,'r1',expected_attempt_id='attempt-0001')
 
     def test_terminal_label_without_trusted_ready_receipt_cannot_complete_wrapper(self):

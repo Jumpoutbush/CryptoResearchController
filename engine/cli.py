@@ -17,7 +17,7 @@ def dispatch(args):
         if scheduler.active(project) is None: raise ValueError('Start a fixed-problem attempt first')
         scheduler.check(project)
         return research.run_child(research.runner_command(project, args))
-    readonly = (group == 'problem' and action in {'list', 'show'}) or (group == 'attempt' and action == 'status') or (group == 'claim' and action in {'status', 'show'}) or (group == 'discovery' and not args.file)
+    readonly = (group == 'problem' and action in {'list', 'show'}) or (group == 'attempt' and action in {'status', 'authority-status'}) or (group == 'claim' and action in {'status', 'show'}) or (group == 'discovery' and not args.file)
     with contextlib.ExitStack() as stack:
         if not readonly:
             stack.enter_context(research.project_lock(project))
@@ -30,6 +30,13 @@ def dispatch(args):
             if action == 'start': result = scheduler.start(project, args.problem, version=args.version)
             elif action == 'extend': result = scheduler.extend(project, args.reason)
             elif action == 'close': result = scheduler.close(project, args.reason)
+            elif action in {'authority-status', 'authority-enroll', 'authority-recover'}:
+                from . import discovery_authority
+                if action == 'authority-status': result = discovery_authority.status(project)
+                elif action == 'authority-enroll': result = discovery_authority.enroll(project, args.reason,
+                    expected_ledger_sha256=args.expected_ledger_sha256)
+                else: result = discovery_authority.recover(project, args.reason,
+                    expected_afterimage_sha256=args.expected_afterimage_sha256)
             else:
                 result = ledger(project)
                 try: scheduler.check(project); result['preflight'] = 'READY' if scheduler.active(project) else 'NO_ACTIVE_ATTEMPT'
@@ -160,7 +167,7 @@ def add_commands(subparsers, add_project, common_run_options):
             cmd.add_argument('--max-bytes',type=int,default=32768); cmd.add_argument('--dry-run',action='store_true')
         if action == 'build':
             cmd.add_argument('--dry-run', action='store_true')
-            cmd.add_argument('--cache-only',action='store_true',help='仅重建索引，保留并报告损坏的历史，不追加事件')
+            cmd.add_argument('--cache-only',action='store_true',help='恢复例外：仅重建索引并报告pending_revocations；不追加历史、不写主张失效锁，持久记录须claim refresh')
         if action == 'diff':
             cmd.add_argument('--from-index',required=True); cmd.add_argument('--to-index',required=True)
         if action == 'explain':
@@ -174,7 +181,8 @@ def add_commands(subparsers, add_project, common_run_options):
         if action == 'import': cmd.add_argument('--file', required=True)
         if action in {'import', 'invalidate'}: cmd.add_argument('--reason', required=True)
     for group, actions in [('problem', ('list', 'show', 'import')),
-            ('attempt', ('start', 'status', 'run', 'extend', 'close')),
+            ('attempt', ('start', 'status', 'run', 'extend', 'close',
+                         'authority-status', 'authority-enroll', 'authority-recover')),
             ('claim', ('import', 'status', 'show', 'review', 'invalidate', 'refresh')),
             ('verify', ('lean', 'counterexample'))]:
         top = subparsers.add_parser(group, help='Mathematical Discovery Engine: ' + group)
@@ -191,7 +199,9 @@ def add_commands(subparsers, add_project, common_run_options):
                     cmd.add_argument('--evidence', required=True); cmd.add_argument('--reviewer', required=True)
             elif group == 'attempt':
                 if action == 'start': cmd.add_argument('--problem', required=True); cmd.add_argument('--version', type=int)
-                if action in {'extend', 'close'}: cmd.add_argument('--reason', required=True)
+                if action in {'extend', 'close', 'authority-enroll', 'authority-recover'}: cmd.add_argument('--reason', required=True)
+                if action == 'authority-enroll': cmd.add_argument('--expected-ledger-sha256', required=True)
+                if action == 'authority-recover': cmd.add_argument('--expected-afterimage-sha256', required=True)
                 if action == 'run':
                     common_run_options(cmd); cmd.add_argument('--dry-run', action='store_true')
             else:

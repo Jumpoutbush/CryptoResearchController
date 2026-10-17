@@ -98,12 +98,13 @@ def ledger_path(project):
 
 
 def ledger(project):
-    return configuration.load_json(ledger_path(project),
-        {'schema_version': 1, 'active_attempt': None, 'attempts': []})
+    from .discovery_authority import load
+    return load(project)
 
 
 def save_ledger(project, obj):
-    configuration.atomic_json(ledger_path(project), obj)
+    from .discovery_authority import save
+    save(project, obj)
 
 
 def policy(project):

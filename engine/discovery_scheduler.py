@@ -46,7 +46,23 @@ def active(project):
     return next((a for a in data['attempts'] if a['id'] == data.get('active_attempt')), None)
 
 
-def start(project, problem_id, *, version=None):
+def execution_preflight(project):
+    """Default-empty fast path preserves old fixtures without candidate package."""
+    root = configuration.ROOT / 'state/candidates' / configuration.project_id(project)
+    directories = [root / name for name in ('switches', 'resolutions', 'operation_witnesses')]
+    from runner_core import project_link
+    for directory in directories:
+        for component in (directory,*directory.parents):
+            if component.exists() and project_link(component):
+                raise ValueError('CANDIDATE_SWITCH_RECOVERY_REQUIRED: linked operation authority is forbidden')
+    if not any(directory.exists() and any(directory.glob('*.json')) for directory in directories): return
+    from candidate_search.resolution import execution_preflight as candidate_preflight
+    candidate_preflight(project)
+
+
+def prepare_start(project, problem_id, *, version=None, _at=None):
+    """Freeze the existing start operation without changing either authority."""
+    execution_preflight(project)
     config = policy(project)
     if not config['enabled']: raise ValueError('Discovery is disabled by policy')
     import configuration
@@ -55,6 +71,7 @@ def start(project, problem_id, *, version=None):
         raise ValueError('Complete idea-driven initialization and resolve blocking input gaps first')
     if (project / '.control/STOP_REQUESTED').exists(): raise ValueError('Clear the explicit stop request before starting an attempt')
     data = ledger(project)
+    before_data = copy.deepcopy(data); before_state = copy.deepcopy(state)
     if data.get('active_attempt'): raise ValueError('Close the current attempt before starting another')
     problem = get_problem(project, problem_id, version)
     if problem['goal_sha256'] != goal_binding(project)['files']['GOAL.md']:
@@ -66,19 +83,26 @@ def start(project, problem_id, *, version=None):
     attempt = {'id': 'attempt-' + str(len(data['attempts']) + 1).zfill(4),
         'problem_id': problem_id, 'problem_version': problem['version'],
         'problem_sha256': problem['spec_sha256'], 'binding': goal_binding(project),
-        'policy_snapshot': copy.deepcopy(config), 'created_at': stamp(), 'status': 'ACTIVE',
+        'policy_snapshot': copy.deepcopy(config), 'created_at': _at or stamp(), 'status': 'ACTIVE',
         'budget': config['initial_round_budget'], 'extensions': 0, 'calls': [],
         'stagnation': 0, 'checkpoint': None, 'close_reason': None}
     data['attempts'].append(attempt)
     data['active_attempt'] = attempt['id']
-    save_ledger(project, data)
     state.update(phase='PROOF', decision='CONTINUE', priority_problem=problem['spec']['title'],
         next_task='Continue the frozen problem ' + problem_id + ' from obligation ' + problem['spec']['obligations'][0]['id'] + '; preserve its assumptions and output requirements.')
-    configuration.atomic_json(project / 'research/STATE.json', state)
-    return attempt
+    return _prepared_engine_plan(project, 'START', before_data, data, before_state, state,
+        {'problem_id': problem_id, 'version': problem['version'], 'at': attempt['created_at']}, attempt,
+        context={'binding': goal_binding(project), 'problem_sha256': problem['spec_sha256'],
+                 'sources': copy.deepcopy(problem['source_bindings']), 'policy': copy.deepcopy(config)})
+
+
+def start(project, problem_id, *, version=None):
+    plan = prepare_start(project, problem_id, version=version)
+    return commit_prepared(project, plan)
 
 
 def check(project):
+    execution_preflight(project)
     # A closed attempt does not erase an unresolved call or make its budget
     # available again. Recovery must identify the original owner run first.
     for attempt in ledger(project)['attempts']:
@@ -358,12 +382,134 @@ def extend(project, reason):
     return target
 
 
-def close(project, reason):
+def prepare_close(project, reason, *, capture_state=False, _at=None):
+    """Freeze one old close operation; the default legacy close ignores STATE."""
+    execution_preflight(project)
     text(reason, 'close reason')
     data = ledger(project)
+    before_data = copy.deepcopy(data)
     item = next((a for a in data['attempts'] if a['id'] == data.get('active_attempt')), None)
     if item is None: raise ValueError('No active attempt')
-    item['status'] = 'CLOSED'; item['closed_at'] = stamp(); item['close_reason'] = reason
+    item['status'] = 'CLOSED'; item['closed_at'] = _at or stamp(); item['close_reason'] = reason
     data['active_attempt'] = None
-    save_ledger(project, data)
-    return item
+    state = configuration.load_json(project / 'research/STATE.json') if capture_state else None
+    return _prepared_engine_plan(project, 'CLOSE', before_data, data, state, None,
+        {'reason': reason, 'at': item['closed_at'], 'capture_state': capture_state}, item,
+        context={'binding': goal_binding(project)} if capture_state else None)
+
+
+def close(project, reason):
+    return commit_prepared(project, prepare_close(project, reason))
+
+
+def _json_bytes(value):
+    import json
+    return (json.dumps(value, ensure_ascii=False, indent=2) + '\n').encode('utf8')
+
+
+def _file_sha(path):
+    from research_quality import hash_file
+    return hash_file(path) if path.is_file() else None
+
+
+def _prepared_engine_plan(project, operation, before, after, state_before, state_after, arguments, result, context):
+    import hashlib
+    value = {'schema_version': 1, 'project_id': configuration.project_id(project), 'operation': operation,
+        'before_ledger': before, 'after_ledger': after, 'before_state': state_before, 'after_state': state_after,
+        'arguments': arguments, 'result': copy.deepcopy(result), 'context': context,
+        'before_ledger_sha256': _file_sha(ledger_path(project)),
+        'after_ledger_sha256': hashlib.sha256(_json_bytes(after)).hexdigest(),
+        'before_state_sha256': _file_sha(project / 'research/STATE.json') if state_before is not None else None,
+        'after_state_sha256': hashlib.sha256(_json_bytes(state_after)).hexdigest() if state_after is not None else None}
+    value['plan_sha256'] = object_hash(value)
+    return value
+
+
+def _validate_prepared(project, plan):
+    """Derive every allowed change; a caller-supplied afterimage is not authority."""
+    import hashlib
+    try:
+        if (not isinstance(plan, dict) or set(plan) != {'schema_version', 'project_id', 'operation',
+                'before_ledger', 'after_ledger', 'before_state', 'after_state', 'arguments', 'result', 'context',
+                'before_ledger_sha256', 'after_ledger_sha256', 'before_state_sha256', 'after_state_sha256', 'plan_sha256'}
+                or type(plan['schema_version']) is not int or plan['schema_version'] != 1
+                or plan['project_id'] != configuration.project_id(project)
+                or plan['plan_sha256'] != object_hash({k:v for k,v in plan.items() if k != 'plan_sha256'})):
+            raise ValueError('Invalid prepared discovery operation')
+        args = plan['arguments']; at = args['at']
+        if not isinstance(at, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', at):
+            raise ValueError('Prepared discovery timestamp is invalid')
+        before = plan['before_ledger']; after = copy.deepcopy(before)
+        if plan['operation'] == 'START':
+            if set(args) != {'problem_id', 'version', 'at'} or before.get('active_attempt'):
+                raise ValueError('Prepared start requires no previous active owner')
+            config = policy(project)
+            if not config['enabled']: raise ValueError('Discovery is disabled by policy')
+            state = copy.deepcopy(plan['before_state'])
+            if state.get('initialization_required') or state.get('initialization_status') == 'NEEDS_INPUT':
+                raise ValueError('Complete initialization before starting an attempt')
+            problem = get_problem(project, args['problem_id'], args['version'])
+            binding = goal_binding(project)
+            context = {'binding': binding, 'problem_sha256': problem['spec_sha256'],
+                       'sources': copy.deepcopy(problem['source_bindings']), 'policy': copy.deepcopy(config)}
+            if (context != plan['context'] or problem['goal_sha256'] != binding['files']['GOAL.md']
+                    or not fresh(project, problem['source_bindings'])):
+                raise ValueError('Prepared fixed problem, goal, sources or policy changed')
+            if len([a for a in before['attempts'] if a['problem_id'] == args['problem_id']]) >= config['max_independent_attempts']:
+                raise ValueError('Independent attempt budget exhausted for this problem ID')
+            expected = {'id':'attempt-' + str(len(before['attempts']) + 1).zfill(4),
+                'problem_id':args['problem_id'], 'problem_version':problem['version'], 'problem_sha256':problem['spec_sha256'],
+                'binding':binding, 'policy_snapshot':copy.deepcopy(config), 'created_at':at, 'status':'ACTIVE',
+                'budget':config['initial_round_budget'], 'extensions':0, 'calls':[], 'stagnation':0,
+                'checkpoint':None, 'close_reason':None}
+            after['attempts'].append(expected); after['active_attempt'] = expected['id']
+            state.update(phase='PROOF', decision='CONTINUE', priority_problem=problem['spec']['title'],
+                next_task='Continue the frozen problem ' + args['problem_id'] + ' from obligation ' + problem['spec']['obligations'][0]['id'] + '; preserve its assumptions and output requirements.')
+            if state != plan['after_state']: raise ValueError('Prepared start changes STATE outside the existing start operation')
+            if (project / '.control/STOP_REQUESTED').exists(): raise ValueError('Stop request blocks prepared start')
+        elif plan['operation'] == 'CLOSE':
+            if set(args) != {'reason', 'at', 'capture_state'} or type(args['capture_state']) is not bool:
+                raise ValueError('Invalid prepared close arguments')
+            text(args['reason'], 'close reason')
+            expected = next((a for a in after['attempts'] if a['id'] == after.get('active_attempt')), None)
+            if expected is None: raise ValueError('Prepared close owner is missing')
+            expected.update(status='CLOSED', closed_at=at, close_reason=args['reason']); after['active_attempt'] = None
+            if plan['after_state'] is not None: raise ValueError('Close cannot change STATE')
+            if args['capture_state'] and plan['context'] != {'binding':goal_binding(project)}:
+                raise ValueError('Prepared close frozen goal changed')
+        else: raise ValueError('Unsupported prepared discovery operation')
+        if after != plan['after_ledger'] or expected != plan['result']:
+            raise ValueError('Prepared discovery afterimage exceeds the existing operation')
+        if hashlib.sha256(_json_bytes(after)).hexdigest() != plan['after_ledger_sha256']:
+            raise ValueError('Prepared discovery afterimage digest mismatch')
+        if plan['after_state'] is not None and hashlib.sha256(_json_bytes(plan['after_state'])).hexdigest() != plan['after_state_sha256']:
+            raise ValueError('Prepared STATE afterimage digest mismatch')
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError('Corrupt prepared discovery operation') from exc
+
+
+def commit_prepared(project, plan, *, allow_partial=False):
+    """Commit an exact old operation; recovery only finishes its own afterimages."""
+    # Even an already written ledger afterimage may still have a pending
+    # independent authority commit. Finish that explicit local recovery before
+    # considering a separate STATE write from the original prepared operation.
+    ledger(project)
+    _validate_prepared(project, plan)
+    current_ledger = _file_sha(ledger_path(project)); state_path = project / 'research/STATE.json'
+    current_state = _file_sha(state_path) if plan['before_state'] is not None else None
+    ledger_allowed = {plan['before_ledger_sha256']}
+    state_allowed = {plan['before_state_sha256']}
+    if allow_partial:
+        ledger_allowed.add(plan['after_ledger_sha256'])
+        if plan['after_state'] is not None: state_allowed.add(plan['after_state_sha256'])
+    if current_ledger not in ledger_allowed or current_state not in state_allowed:
+        raise ValueError('PREPARED_DISCOVERY_CONFLICT: a third-party ledger or STATE version must not be overwritten')
+    if current_ledger == plan['before_ledger_sha256'] and ledger(project) != plan['before_ledger']:
+        raise ValueError('Prepared discovery beforeimage differs from the original authority')
+    if plan['before_state'] is not None and current_state == plan['before_state_sha256']:
+        if configuration.load_json(state_path) != plan['before_state']:
+            raise ValueError('Prepared STATE beforeimage differs from the original authority')
+    if current_ledger != plan['after_ledger_sha256']: save_ledger(project, plan['after_ledger'])
+    if plan['after_state'] is not None and _file_sha(state_path) != plan['after_state_sha256']:
+        configuration.atomic_json(state_path, plan['after_state'])
+    return copy.deepcopy(plan['result'])
