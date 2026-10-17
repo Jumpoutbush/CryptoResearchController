@@ -19,7 +19,7 @@
 | R13 | 数学核验适配器 | DONE | ce0125947d56e20b3b4690d8005017c30567a965 | 专项27/27；真实Windows入口28步；全量786：785通过/1既有平台跳过；check all/doctor通过 | 固定整数worker仅核验机器谓词；Lean静态预检始终阻断；未审自然语义不升级科学等级 |
 | R14 | 密码学安全审查 | DONE | 6e435e965a839812c38b48324a18b7ed751c819c | 专项24/24；真实Windows入口45步；全量810：809通过/1既有平台跳过；check all/doctor通过 | 报告仅REVIEW_FINDING；理想授权须用户冻结pin；独审仍必要；首轮旧IO访问拒绝留档、无改码完整复跑通过 |
 | R15 | 分支收束 | DONE | ddca136bbc58f24df4cf6f739dbb2b22ebcb6553 | 专项30/30；审查118/118；Windows入口84步；全量887：886通过/1既有跳过；check all/doctor通过 | 局部裁决无科学接受；原budget唯一权威；N01—N04已修；旧discovery显式迁移；真实监督/Lean阻断 |
-| R16 | 评估数据集 | TODO | — | — | — |
+| R16 | 评估数据集 | DONE | 867602f13bd622405f6e9aa0cfc08e302c1863ce | 六类离线专项31/31；Windows入口52步；临时token内核拒读验证；全量918：917通过/1既有跳过；check all/doctor通过 | 仅评分器校准；真实代理隔离NOT_ISOLATED，正式计数0/质量增益未测；30题为后续目标；真实监督/Lean阻断 |
 | R17 | 离线回放 | TODO | — | — | — |
 | R18 | 科研指标 | TODO | — | — | — |
 | R19 | 影子策略 | TODO | — | — | — |
@@ -618,3 +618,55 @@ N04首次失败是夹具把Windows锁标记也算成权威变更，修正观察�
 没有把两者误称为额外产品缺陷。T01—T07与来源级别见review-12ccad9-closure-audit.json。
 个人GOAL、STATE、预算、历史和证明结论未改；真实监督/Lean继续阻断，没有付费轮次或推送。
 R15回执提交后才进入R16；本任务完成R16后停止，不自行进入R17。
+
+## R16 六类基准与私有评分回执（本地离线）
+
+先核对 R15 实现 ddca136、回执 2cbd414、N01—N04 审查修复、887 项完整回归，
+保留 R14 原始 IO 失败及无改码复跑记录，再读取 R16 与对应 OpenSource 附录。
+实现提交 `867602f13bd622405f6e9aa0cfc08e302c1863ce`。未进入 R17，未宣称完整 v4.0 发布完成。
+
+复用 tests/research_benchmark 的 4 个整数样例和 5 个监督收据样例、原精确整数核验与
+supervision_quality.assess_quality，不复制第二套整数解释器或漂移判定器。新建六类各一份
+明确标注的合成教学任务，覆盖定理包含、反例、安全漏洞、OPEN 边界、偏移和恢复。
+CE 接受任意满足精确前提的反例，安全题只核对双查询玩具轨迹；OPEN 未解不自动判失败。
+
+公开包只导出精确 task、来源和 public binding；host 测试/金标准/私有索引不进入该包。
+私有金标准显式登记在控制器及公开工作区之外，冻结输入、任务、来源、oracle 和评价器
+摘要；记录独立于题目作者的审查者及原因。身份字段是可审计声明，不冒称外部身份认证。
+无独立登记时 PENDING_CURATION；登记后只为 CALIBRATION_READY，不开启正式代理执行。
+同版本不可替换；新版本保留旧金标准和责任差异；registry、独立 record、oracle 单侧缺失
+或截断均停止。公开答案与可从公开测试推导的答案不能追认为盲测秘密。
+
+验收前只读复核发现并修复三个新评分边界：OPEN 模型类型敏感比较，不接受 true 替代1；
+恢复题保留原 attempt/call 唯一性、owner 和原调用内容；截断私有 registry 和 record 时，
+残留 oracle 也作为独立见证阻断。失败回归和实际原始日志保留，不改个人项目恢复权威。
+
+Windows 真实探针创建临时 AppContainer、固定隐藏退出子进程及零能力 token；控制器
+线程模拟该存活子进程 token 进行文件读检查。公开临时副本读取成功、私有副本由内核
+CreateFile 以错误5拒绝，host 前后均可读，临时进程/句柄/profile/目录清理通过。
+**子进程本身未读文件，真实科研代理 T13 隔离仍未认证**；该证据不认证另一进程、网络、
+工具或真实监督。正式计数固定0，quality_gain=NOT_MEASURED，模型/监督/Lean不放行。
+
+实际命令（cwd D:\CryptoResearchController，均退出0）：
+
+- `python -B -m unittest discover -s tests -p "test_benchmark_*.py" -v`：31/31，17.752秒。
+- `python -B scripts/verify_r16_offline.py --output <本会话outputs/R16/entry-final>`：真实 Windows research.cmd 临时样例52步，49.06秒，六类各一正一负；嵌套模型/程序/网络/监督/Lean0，正式计数0。
+- `python -B -m unittest discover -s tests -v`：918项，917通过、1项既有POSIX模拟可执行文件跳过，1623.175秒；158份公开Python源验收期间SHA一致。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`通过。
+- diff --check通过；347份本轮范围外旧文件未改，843个私人文件路径及SHA完全不变。
+
+首个探针 CreateProcess Win203 留档，补齐仅指临时 profile 的最小环境后通过；未改系统ACL。
+native 首次幂等断言误纳既有追加式锁标记，排除协调锁后仍逐字节核对全部金标准/历史，
+不将此夹具错误记为产品缺陷。原始RED、实际命令及来源摘要分别保存在本会话R16输出。
+
+参考 PaperBench 官方 frontier-evals b78dab1da774a6456b1ed9c48c9ff194ee3ff36d，核对
+Judge.judge / Judge.grade、GradedTaskNode 及 JudgeEval 的阶段分离和评分校准；ARA 固定
+e52a925e9d03b4ada3008653e72f99b04116fca2、OpenAI Math 固定
+1581d4cbdd69a0faf34b2089614fe2a814316a6a，均核对完整许可证SHA。Science One 仅参考
+官方证据链说明，不虚构完整公开代码。未安装、复制执行上游或下载付费/LFS基准数据。
+
+正常路径见 six-category-calibration.json；故障路径见 fault-task-mutation-stale.json 和
+fault-self-asserted-isolation-not-accepted.json（均在本会话R16/entry-final）。
+本轮 DONE 只表示上述离线实现与系统测试完成；正式真实代理隔离门禁保持未通过。
+GOAL、STATE、预算、历史和证明结论均未改变；真实监督/Lean继续阻断，无付费轮次或推送。
+按用户要求完成 R16 后停止，R17—R20 保持 TODO。
