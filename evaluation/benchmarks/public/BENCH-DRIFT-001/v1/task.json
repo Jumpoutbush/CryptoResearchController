@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "case_id": "BENCH-DRIFT-001",
+  "version": 1,
+  "category": "RESEARCH_DRIFT",
+  "answer_status": "KNOWN",
+  "source_review_status": "SYNTHETIC_EXPLICIT",
+  "author": "R16 synthetic fixture author",
+  "frozen_goal": "Assess the frozen accepted receipts with the original deterministic scheduling rules; do not infer mathematical truth from receipt metadata.",
+  "public_input": {
+    "rounds": [
+      {
+        "type": "RESEARCH_ROUND",
+        "run_id": "fixture-round-1",
+        "anchor_id": "synthetic-mainline",
+        "work_kind": "PROOF",
+        "result_status": "SUPPORT_ONLY",
+        "goal_alignment": {
+          "scope": "SUPPORT",
+          "mainline_progress": false,
+          "reason": "Synthetic controller receipt; no mathematical certification."
+        },
+        "evidence_hashes": {
+          "proofs/attempt-1.md": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      {
+        "type": "RESEARCH_ROUND",
+        "run_id": "fixture-round-2",
+        "anchor_id": "synthetic-mainline",
+        "work_kind": "PROOF",
+        "result_status": "SUPPORT_ONLY",
+        "goal_alignment": {
+          "scope": "SUPPORT",
+          "mainline_progress": false,
+          "reason": "Synthetic controller receipt; no mathematical certification."
+        },
+        "evidence_hashes": {
+          "proofs/attempt-2.md": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      {
+        "type": "RESEARCH_ROUND",
+        "run_id": "fixture-round-3",
+        "anchor_id": "synthetic-mainline",
+        "work_kind": "PROOF",
+        "result_status": "SUPPORT_ONLY",
+        "goal_alignment": {
+          "scope": "SUPPORT",
+          "mainline_progress": false,
+          "reason": "Synthetic controller receipt; no mathematical certification."
+        },
+        "evidence_hashes": {
+          "proofs/attempt-3.md": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    ],
+    "core_obligations": {
+      "GOAL": "Keep the frozen exact authorization interface.",
+      "SECURITY": "Establish the quantified malicious-security invariant without weakened leakage."
+    },
+    "anchor_id": "synthetic-mainline",
+    "legacy_fixture_adapter": {
+      "file": "tests/research_benchmark/supervision_cases.json",
+      "id": "unrelated-auxiliary-lemmas",
+      "sha256": "c7d9240dd1b6d4b9fefdca98acd47e74510fba9c656abd4e59abca7365519f19"
+    }
+  },
+  "input_sha256": "e2219bec4ca70f7c3ac4dd8ffeab50df77dd89b2b86abb9d6452aefa9909bb28",
+  "sources": [
+    {
+      "id": "BENCH-DRIFT-001-SOURCE",
+      "version": "v1",
+      "file": "public/BENCH-DRIFT-001/v1/source.md",
+      "sha256": "8544516c5063aa0a0f8a042c1fe5a3b45860ab5dba4912d71d170cf6282a1eaf",
+      "locator": "Existing accepted-receipt case, rounds 1-3",
+      "kind": "EXISTING_FIXTURE_ADAPTER"
+    }
+  ],
+  "allowed_tools": [
+    "READ_PUBLIC_DATA",
+    "EXACT_INTEGER_CHECK",
+    "DETERMINISTIC_RECEIPT_REPLAY"
+  ],
+  "budget": {
+    "model_calls": 0,
+    "tool_calls": 10000,
+    "wall_seconds": 30
+  },
+  "output_contract": {
+    "format": "JSON",
+    "required_fields": [
+      "case_id",
+      "version",
+      "input_sha256",
+      "decision",
+      "finding_codes"
+    ],
+    "scope": "Data-only calibration response; no scientific promotion or claimed model-quality gain."
+  }
+}

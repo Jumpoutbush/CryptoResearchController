@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "case_id": "BENCH-CE-001",
+  "version": 1,
+  "category": "COUNTEREXAMPLE",
+  "answer_status": "KNOWN",
+  "source_review_status": "SYNTHETIC_EXPLICIT",
+  "author": "R16 synthetic fixture author",
+  "frozen_goal": "Check the exact registered integer predicate, including all preconditions, and submit a concrete assignment when it is false.",
+  "public_input": {
+    "machine_statement": {
+      "domain": "INTEGER",
+      "variables": [
+        "a",
+        "q"
+      ],
+      "preconditions": [
+        "q > 1",
+        "a % q == 0"
+      ],
+      "conclusion": "a == q"
+    },
+    "legacy_fixture_adapter": {
+      "file": "tests/research_benchmark/cases.json",
+      "id": "modular-is-not-integer-equality",
+      "sha256": "4125763eaa3c814aec9ba31db7dce23b99476722b66da94bd512f3fdefebe382"
+    }
+  },
+  "input_sha256": "fbec27e8183684f4b7d3501a7e1632b181b41d9c138e17dc4a68c9ec28cd4a0f",
+  "sources": [
+    {
+      "id": "BENCH-CE-001-SOURCE",
+      "version": "v1",
+      "file": "public/BENCH-CE-001/v1/source.md",
+      "sha256": "6eba9591589ace1586454700ee08a99678fc3f267a9ed93033b3d7e355d0a5d1",
+      "locator": "Existing predicate modular-is-not-integer-equality",
+      "kind": "EXISTING_FIXTURE_ADAPTER"
+    }
+  ],
+  "allowed_tools": [
+    "READ_PUBLIC_DATA",
+    "EXACT_INTEGER_CHECK",
+    "DETERMINISTIC_RECEIPT_REPLAY"
+  ],
+  "budget": {
+    "model_calls": 0,
+    "tool_calls": 10000,
+    "wall_seconds": 30
+  },
+  "output_contract": {
+    "format": "JSON",
+    "required_fields": [
+      "case_id",
+      "version",
+      "input_sha256",
+      "decision",
+      "witness"
+    ],
+    "scope": "Data-only calibration response; no scientific promotion or claimed model-quality gain."
+  }
+}

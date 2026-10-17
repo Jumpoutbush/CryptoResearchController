@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "case_id": "BENCH-OPEN-001",
+  "version": 1,
+  "category": "OPEN_BOUNDARY",
+  "answer_status": "OPEN",
+  "source_review_status": "SYNTHETIC_EXPLICIT",
+  "author": "R16 synthetic fixture author",
+  "frozen_goal": "State the unresolved boundary of this synthetic unfinished construction without relaxing the frozen model or claiming an unsupported proof.",
+  "public_input": {
+    "frozen_model": {
+      "parties": 3,
+      "corruption_threshold": 1,
+      "corruption_timing": "ADAPTIVE",
+      "leakage": "Declared transcript only",
+      "quantifiers": "all permitted adaptive schedules"
+    },
+    "open_obligations": [
+      "O-ADAPTIVE-SIMULATOR"
+    ],
+    "statement": "Synthetic unfinished construction: provide a simulator for every permitted adaptive schedule without undeclared secret inputs."
+  },
+  "input_sha256": "a22809605e96b495699e1853a92c93ee22a550aea4d012ecdf413fc4cd5fe98a",
+  "sources": [
+    {
+      "id": "BENCH-OPEN-001-SOURCE",
+      "version": "v1",
+      "file": "public/BENCH-OPEN-001/v1/source.md",
+      "sha256": "b64ce548f936aeb25e9de3eab93d7f23e56fac32a629759118e44a7b099ec1d2",
+      "locator": "Unfinished construction card, lines 1-4",
+      "kind": "SYNTHETIC_WRITTEN_DERIVATION"
+    }
+  ],
+  "allowed_tools": [
+    "READ_PUBLIC_DATA",
+    "EXACT_INTEGER_CHECK",
+    "DETERMINISTIC_RECEIPT_REPLAY"
+  ],
+  "budget": {
+    "model_calls": 0,
+    "tool_calls": 10000,
+    "wall_seconds": 30
+  },
+  "output_contract": {
+    "format": "JSON",
+    "required_fields": [
+      "case_id",
+      "version",
+      "input_sha256",
+      "decision",
+      "frozen_model",
+      "unresolved_obligations",
+      "proof_status"
+    ],
+    "scope": "Data-only calibration response; no scientific promotion or claimed model-quality gain."
+  }
+}

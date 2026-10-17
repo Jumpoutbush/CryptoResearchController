@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "dataset": "CryptoResearchBench calibration v1",
+  "scope": "Six explicitly synthetic independent evaluator fixtures; no formal agent benchmark or measured research-quality gain.",
+  "evaluator": {
+    "version": "r16-calibration-v1",
+    "sha256": "3062da7044fa2232ce562bc7ce332011d923d6d195bcf751983fbb5275e5d219",
+    "files": {
+      "evaluation/schema.py": "572cd1fb987e9c3bcd40d13199b0c5a61a6c407f96e1b1d86a8287fb6128baa2",
+      "evaluation/cases.py": "5848690a90915a27c0cc52b1082ec0784a4caf4ece337895baa1fd275c0107f6",
+      "evaluation/scoring.py": "432025900de455de7de8e53f455d87ae9433b40ada769f3a5247ec565353a095",
+      "evaluation/registry.py": "2af5f163bf0ee86d6d0936c4134a9d25d79d1e08e0c88d5e4c349104d2925a66",
+      "evaluation/validate_cases.py": "609ea400a0820e7664cf498a03252561ac5faffc01fc791203d8982daf9d5915",
+      "engine/falsification.py": "ce7988eff5443b9c4345b87dfc01fa71a5908653014ff39e9b5301f4521b147a",
+      "supervision_quality.py": "5bad65659026b93e69b96f6b7916c599fbaa668d9933dfadd9a02c94d6f3d214"
+    }
+  },
+  "cases": [
+    {
+      "case_id": "BENCH-LIT-001",
+      "version": 1,
+      "category": "THEOREM_COVERAGE",
+      "task_file": "public/BENCH-LIT-001/v1/task.json",
+      "task_sha256": "1bdaae43415ece00b5f82cffaa68f4ac5c4700e4516e1843722bfcf7e0a3c159",
+      "input_sha256": "f544f7434631f0e092155e856022bc63be8961bb7cc4f70662486ce092dbe218"
+    },
+    {
+      "case_id": "BENCH-CE-001",
+      "version": 1,
+      "category": "COUNTEREXAMPLE",
+      "task_file": "public/BENCH-CE-001/v1/task.json",
+      "task_sha256": "b786c97e66ef7b0dcaa4f33bb875955d6ef75ce493d7f2258036e53686a6f754",
+      "input_sha256": "fbec27e8183684f4b7d3501a7e1632b181b41d9c138e17dc4a68c9ec28cd4a0f"
+    },
+    {
+      "case_id": "BENCH-SEC-001",
+      "version": 1,
+      "category": "SECURITY_FLAW",
+      "task_file": "public/BENCH-SEC-001/v1/task.json",
+      "task_sha256": "783f7a37f749e2f08079911c689817d79ee56c89058501616a2669d9fc5ca52b",
+      "input_sha256": "7807b2f99e9da05c3ea2cb26cd282875bcd18e3b2e4c6810ec6e64ccfbd5223d"
+    },
+    {
+      "case_id": "BENCH-OPEN-001",
+      "version": 1,
+      "category": "OPEN_BOUNDARY",
+      "task_file": "public/BENCH-OPEN-001/v1/task.json",
+      "task_sha256": "6313522ea8963b9bbc97e1e352930774c3b969e6d3c51c1e1c15a40fc1f1bf43",
+      "input_sha256": "a22809605e96b495699e1853a92c93ee22a550aea4d012ecdf413fc4cd5fe98a"
+    },
+    {
+      "case_id": "BENCH-DRIFT-001",
+      "version": 1,
+      "category": "RESEARCH_DRIFT",
+      "task_file": "public/BENCH-DRIFT-001/v1/task.json",
+      "task_sha256": "fd6e2ce15884a5b0cace00b1837192685246ff6f9afb9b4dd322345ed487d7b1",
+      "input_sha256": "e2219bec4ca70f7c3ac4dd8ffeab50df77dd89b2b86abb9d6452aefa9909bb28"
+    },
+    {
+      "case_id": "BENCH-REC-001",
+      "version": 1,
+      "category": "STATE_RECOVERY",
+      "task_file": "public/BENCH-REC-001/v1/task.json",
+      "task_sha256": "ce057753b559d7e0a03b1276dd2b5d75b8aa62b351ee3c3d5c9ca2c875700d65",
+      "input_sha256": "a7af5c25a75998935e19b77fcb1c8e096cf89fad3b8ba951d71afcb5860a3445"
+    }
+  ]
+}

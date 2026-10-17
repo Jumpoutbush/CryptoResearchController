@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "case_id": "BENCH-LIT-001",
+  "version": 1,
+  "category": "THEOREM_COVERAGE",
+  "answer_status": "KNOWN",
+  "source_review_status": "SYNTHETIC_EXPLICIT",
+  "author": "R16 synthetic fixture author",
+  "frozen_goal": "Compare the exact candidate with the supplied synthetic original derivation, preserving every scope axis.",
+  "public_input": {
+    "candidate_statement": "For integers x,y, (x+y)^2 = x^2 + 2*x*y + y^2.",
+    "candidate_scope": {
+      "domain": "integers",
+      "quantifiers": "for all x,y",
+      "assumptions": [
+        "x and y are integers"
+      ],
+      "input_contract": "two exact integers",
+      "output_contract": "the expanded square of their sum",
+      "proof_obligations": [
+        "O-EXPAND"
+      ]
+    }
+  },
+  "input_sha256": "f544f7434631f0e092155e856022bc63be8961bb7cc4f70662486ce092dbe218",
+  "sources": [
+    {
+      "id": "BENCH-LIT-001-SOURCE",
+      "version": "v1",
+      "file": "public/BENCH-LIT-001/v1/source.md",
+      "sha256": "4dc02f2ef3f7f3de8d15f4e744ddf323821f7d3381704608d98c934515f009dc",
+      "locator": "Theorem 2, lines 2-5",
+      "kind": "SYNTHETIC_WRITTEN_DERIVATION"
+    }
+  ],
+  "allowed_tools": [
+    "READ_PUBLIC_DATA",
+    "EXACT_INTEGER_CHECK",
+    "DETERMINISTIC_RECEIPT_REPLAY"
+  ],
+  "budget": {
+    "model_calls": 0,
+    "tool_calls": 10000,
+    "wall_seconds": 30
+  },
+  "output_contract": {
+    "format": "JSON",
+    "required_fields": [
+      "case_id",
+      "version",
+      "input_sha256",
+      "decision",
+      "source",
+      "coverage_mapping"
+    ],
+    "scope": "Data-only calibration response; no scientific promotion or claimed model-quality gain."
+  }
+}

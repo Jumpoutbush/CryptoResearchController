@@ -134,6 +134,8 @@ def dispatch_knowledge(args):
 def add_commands(subparsers, add_project, common_run_options):
     from .candidate_cli import add_commands as add_candidates
     add_candidates(subparsers, add_project)
+    from .benchmark_cli import add_commands as add_benchmarks
+    add_benchmarks(subparsers)
     top = subparsers.add_parser('knowledge', help='长期科研知识：来源追溯、失效传播与现有主张图')
     subs = top.add_subparsers(dest='action', required=True)
     descriptions = {'status': '只读查看来源、知识与现有主张的当前状态',

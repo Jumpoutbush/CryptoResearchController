@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "case_id": "BENCH-REC-001",
+  "version": 1,
+  "category": "STATE_RECOVERY",
+  "answer_status": "KNOWN",
+  "source_review_status": "SYNTHETIC_EXPLICIT",
+  "author": "R16 synthetic fixture author",
+  "frozen_goal": "Choose the finite-state recovery action that retains every original reservation without redispatch or inventing a new run.",
+  "public_input": {
+    "before_image": {
+      "attempts": [
+        {
+          "id": "attempt-0001",
+          "calls": []
+        }
+      ]
+    },
+    "pending_afterimage": {
+      "attempts": [
+        {
+          "id": "attempt-0001",
+          "calls": [
+            {
+              "run_id": "synthetic-reserved-run",
+              "status": "RESERVED"
+            }
+          ]
+        }
+      ]
+    },
+    "before_sha256": "c9579c532e2fcba188e2e440dbf20f4af5f6941e81071a28bc1dde2c0b8a521c",
+    "afterimage_sha256": "8528c3f463e42d5ad6f7589cfb01839263ec4b6a79ea979cdfd3b939b8a3d1b9",
+    "actual_sha256": "c9579c532e2fcba188e2e440dbf20f4af5f6941e81071a28bc1dde2c0b8a521c",
+    "scope": "Finite recovery-decision fixture only; does not execute recovery or models."
+  },
+  "input_sha256": "a7af5c25a75998935e19b77fcb1c8e096cf89fad3b8ba951d71afcb5860a3445",
+  "sources": [
+    {
+      "id": "BENCH-REC-001-SOURCE",
+      "version": "v1",
+      "file": "public/BENCH-REC-001/v1/source.md",
+      "sha256": "48fd93abf2f42ff4fb4a15c41b862f3452871fb42f1f7771322935f4dbd674cc",
+      "locator": "Owned before/after image argument, lines 2-4",
+      "kind": "SYNTHETIC_DATA_TRACE"
+    }
+  ],
+  "allowed_tools": [
+    "READ_PUBLIC_DATA",
+    "EXACT_INTEGER_CHECK",
+    "DETERMINISTIC_RECEIPT_REPLAY"
+  ],
+  "budget": {
+    "model_calls": 0,
+    "tool_calls": 10000,
+    "wall_seconds": 30
+  },
+  "output_contract": {
+    "format": "JSON",
+    "required_fields": [
+      "case_id",
+      "version",
+      "input_sha256",
+      "decision",
+      "afterimage_sha256",
+      "redispatch",
+      "preserved_run_ids"
+    ],
+    "scope": "Data-only calibration response; no scientific promotion or claimed model-quality gain."
+  }
+}
