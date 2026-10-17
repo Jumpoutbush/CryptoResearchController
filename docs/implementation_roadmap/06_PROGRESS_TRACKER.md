@@ -18,7 +18,7 @@
 | R12 | 搜索预算 | DONE | 2ac1e71d83f138364939d79f9fd3e22cb756c1c0 | 候选专项78/78；真实Windows入口63步；全量759：758通过/1既有平台跳过；check all/doctor通过 | 最多3候选的建议窗口；原预算唯一权威；归属不证明提示注入；真实监督/Lean阻断 |
 | R13 | 数学核验适配器 | DONE | ce0125947d56e20b3b4690d8005017c30567a965 | 专项27/27；真实Windows入口28步；全量786：785通过/1既有平台跳过；check all/doctor通过 | 固定整数worker仅核验机器谓词；Lean静态预检始终阻断；未审自然语义不升级科学等级 |
 | R14 | 密码学安全审查 | DONE | 6e435e965a839812c38b48324a18b7ed751c819c | 专项24/24；真实Windows入口45步；全量810：809通过/1既有平台跳过；check all/doctor通过 | 报告仅REVIEW_FINDING；理想授权须用户冻结pin；独审仍必要；首轮旧IO访问拒绝留档、无改码完整复跑通过 |
-| R15 | 分支收束 | TODO | — | — | — |
+| R15 | 分支收束 | DONE | ddca136bbc58f24df4cf6f739dbb2b22ebcb6553 | 专项30/30；审查118/118；Windows入口84步；全量887：886通过/1既有跳过；check all/doctor通过 | 局部裁决无科学接受；原budget唯一权威；N01—N04已修；旧discovery显式迁移；真实监督/Lean阻断 |
 | R16 | 评估数据集 | TODO | — | — | — |
 | R17 | 离线回放 | TODO | — | — | — |
 | R18 | 科研指标 | TODO | — | — | — |
@@ -576,3 +576,45 @@ ARA官方固定e52a925e9d03b4ada3008653e72f99b04116fca2，实际参考Markdown r
 本会话outputs/R14保存最终命令、原始失败和复跑、正常/故障JSON、来源摘要及修改清单。
 个人GOAL、STATE、预算、历史及证明结论均未改变；真实监督和Lean继续阻断，无付费调用或推送。
 R11—R14逐轮验收与本地提交完成，停止在R14；R15及以后保持TODO，未进入或宣称完整版本发布。
+
+## R15 分支收束与 12ccad9 审查修复回执（2026-10-17）
+
+先核对 R14 的 6e435e9/12ccad9 及首次 IO 失败、两次单例和无改码完整复跑，
+再读取 R15 与对应 OpenSource 附录；未提前读取 R16。实现提交 `ddca136bbc58f24df4cf6f739dbb2b22ebcb6553`。
+用户在验收前提供 12ccad9 静态报告，新增 N01—N04 一并修复并单列证据，原报告 FAIL 保留。
+
+精确反例与原独立范围审查共同支持 REFUTED；COVERED 要求 R07 原文、页码、定理及技术
+包含映射，正例使用临时 PDF 夹具验收。缺材料保持 CONDITIONAL，RETIRED 不强制创建科学主张。局部否决不推及父问题
+或全族，归档保留假设、原因、重启条件、原轮数、未闭合义务及 SUPPORT/DIRECT_DEPENDENCY。
+知识检索只把归档作为非正面历史依据；机器回执缺失或 canonical 持久审查撤销使其待核验。
+
+显式 CLOSE 与 START 复用原尝试前后像和共享路线预算；不改 selected_idea、不自动 run。
+独立 intent/witness 和高水位历史控制本地恢复，单侧丢失、第三方 STATE、stale checkpoint、
+STOP/review/unknown 均阻断旧执行入口。重算请求哈希不能伪造科学裁决、phase、来源或轮数。
+同问题多候选需精确原归属；旧未绑定尝试须显式认领；重启须新构造和原独立审查回执。
+
+N01 为原 discovery 主账本增加统一权威、登记和冻结 pending 后像。缺失或回退不遗忘已用
+调用和独立尝试；旧完整数据显式按 SHA 登记，未知外部结果不重派。本轮未迁移个人项目。
+N02 比较完整自适应预算 scope，原 ideal interface 摘要契约不变；N03 首次历史映射核对原
+COMPLETE 归档与 owner/settlement/epoch/anchor/count，重放原保护历史不依赖展示窗口。
+N04 保留 cache-only 只修派生索引的例外，不记录 canonical latch 或 R08 观察事件。
+
+实际命令（cwd 为 D:\CryptoResearchController，均退出0）：
+
+- `python -B -m unittest discover -s tests -p test_candidate_end_to_end.py -v`：30/30，210.206秒。
+- `python -B -m unittest discover -s tests -p "test_review_*.py" -v`：118/118，281.441秒，含原审查83项与新增35项。
+- `python -B -m unittest discover -s tests -p "test_candidate_*.py" -v`：候选兼容118/118；各专项有重叠，不相加当作独立测试总数。
+- `python -B scripts/verify_r15_offline.py --output <本会话outputs/R15/entry-final>`：真实 Windows research.cmd 临时样例84步，185.18秒；受信整数worker恰好1次，其余模型/网络/监督/Lean全部0。
+- `python -B -m unittest discover -s tests -v`：887项，886通过、1项原POSIX模拟可执行文件跳过，1638.062秒；145份公开Python源在最终验收期间SHA一致。
+- `python -B research.py check all`：实际三个项目通过；`python -B research.py doctor --offline`通过。
+- 暂存 diff --check 通过；321份实现范围外旧文件未改，843个个人文件路径及SHA完全不变。
+
+AIDE journal 固定1d8ec4026c67729443294c8b5c0907242d0de38c，另核对当前HEAD同源码；
+ARA trace 固定e52a925e9d03b4ada3008653e72f99b04116fca2，均核对MIT全文SHA，仅参考失败保留
+与来源组织，未复制/安装/运行上游。详细文件和许可摘要见CANDIDATES_R15及本会话来源回执。
+
+原RED与最终命令留档；N03最早RED仅工具/消息记录，无落盘日志，未补造。
+N04首次失败是夹具把Windows锁标记也算成权威变更，修正观察范围后验证原既有行为。
+没有把两者误称为额外产品缺陷。T01—T07与来源级别见review-12ccad9-closure-audit.json。
+个人GOAL、STATE、预算、历史和证明结论未改；真实监督/Lean继续阻断，没有付费轮次或推送。
+R15回执提交后才进入R16；本任务完成R16后停止，不自行进入R17。
